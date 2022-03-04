@@ -2,29 +2,14 @@ use std::{net::TcpListener, io::Read, path::Path};
 use rusqlite::{Connection, OpenFlags};
 
 mod db;
+mod constants;
+use constants::*;
 
-pub type Hash = [u8; 32];
-pub type RSA = [u8; 5];  // todo: what is the correct length?
-
+pub type Hash = [u8; HASH_SIZE];
+pub type RSA = [u8; RSA_SIZE];
+pub type Contents = [u8; CONTENT_SIZE];
 
 const IP_PORT: &str = "localhost:7878";
-const PADDING_SIZE: usize = 6;
-const CONTENT_SIZE: usize = 512;
-const HASH_SIZE: usize = std::mem::size_of::<Hash>();
-const RSA_SIZE: usize = std::mem::size_of::<RSA>();
-
-const MSG_PADDING: [u8; PADDING_SIZE] = *b"start\n";
-const FETCH_PADDING: [u8; PADDING_SIZE] = *b"fetch\n";
-const QUERY_PADDING: [u8; PADDING_SIZE] = *b"query\n";
-const END_PADDING: [u8; PADDING_SIZE] = *b"endend";
-
-const CHAT_ID_START: usize = PADDING_SIZE + HASH_SIZE;
-const USER_ID_START: usize = CHAT_ID_START + HASH_SIZE;
-const SIGNATURE_START: usize = USER_ID_START + HASH_SIZE;
-const RSA_PUB_START: usize = SIGNATURE_START + HASH_SIZE;
-const CONTENTS_START: usize = RSA_PUB_START + HASH_SIZE;
-const END_PADDING_START: usize = CONTENTS_START + CONTENT_SIZE;
-const PACKET_SIZE: usize = END_PADDING_START + PADDING_SIZE;
 
 /* Single "send message" packet structure
 
@@ -76,7 +61,7 @@ pub struct Message {
     user_id: Hash,
     signature: Hash,
     rsa_pub: RSA,  // todo: what type is this?
-    contents: [u8; CONTENT_SIZE],
+    contents: Contents,
     time: Option<[u8; 16]>,
 }  // 624 bytes big (without padding)
 
