@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-use crate::{Message, Hash, Query};
+use crate::{msg::Message, Hash, Query};
 
 pub fn create(path: Option<&str>) -> Connection {
     let conn = if let Some(path) = path {

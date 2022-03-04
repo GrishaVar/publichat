@@ -2,6 +2,7 @@ use std::{net::TcpListener, io::Read, path::Path};
 use rusqlite::{Connection, OpenFlags};
 
 mod db;
+mod msg;
 mod constants;
 use constants::*;
 
@@ -49,56 +50,6 @@ Total: 96
 */
 
 
-const BAD_WORDS: [Hash; 4] = [
-    [0; HASH_SIZE],
-    [1; HASH_SIZE],
-    [2; HASH_SIZE],
-    [3; HASH_SIZE],
-];  // todo: add bad words hashes
-
-pub struct Message {
-    chat_id: Hash,
-    user_id: Hash,
-    signature: Hash,
-    rsa_pub: RSA,  // todo: what type is this?
-    contents: Contents,
-    time: Option<[u8; 16]>,
-}  // 624 bytes big (without padding)
-
-impl Message {
-    fn is_bad_word(&self) -> bool {
-        BAD_WORDS.contains(&self.chat_id)
-    }
-
-    fn from_bytes(bytes: &[u8; PACKET_SIZE]) -> Option<Message> {
-        // check start and end paddings
-        if bytes[..PADDING_SIZE]      != MSG_PADDING {return None}
-        if bytes[END_PADDING_START..] != END_PADDING {return None}
-
-        Some(Message {
-            chat_id:   bytes[CHAT_ID_START..][..HASH_SIZE].try_into().ok()?,
-            user_id:   bytes[USER_ID_START..][..HASH_SIZE].try_into().ok()?,
-            signature: bytes[SIGNATURE_START..][..HASH_SIZE].try_into().ok()?,
-            rsa_pub:   bytes[RSA_PUB_START..][..RSA_SIZE].try_into().ok()?,
-            contents:  bytes[CONTENTS_START..][..CONTENT_SIZE].try_into().ok()?,
-            time:      None,
-        })
-    }
-
-    fn to_bytes(&self) -> [u8; PACKET_SIZE] {
-        let mut res: [u8; PACKET_SIZE] = [0; PACKET_SIZE];
-
-        res.copy_from_slice(&MSG_PADDING);
-        res[CHAT_ID_START..].copy_from_slice(&self.chat_id);
-        res[USER_ID_START..].copy_from_slice(&self.user_id);
-        res[SIGNATURE_START..].copy_from_slice(&self.signature);
-        res[RSA_PUB_START..].copy_from_slice(&self.rsa_pub);
-        res[CONTENTS_START..].copy_from_slice(&self.contents);
-        res[END_PADDING_START..].copy_from_slice(&END_PADDING);    
-        res
-    }
-}
-
 pub enum Query {
     Fetch {chat_id: Hash},
 }
@@ -123,7 +74,7 @@ fn main() {
     };
 
     {  // testing db
-        db::add_msg(&db_conn, Message {
+        db::add_msg(&db_conn, msg::Message {
             chat_id:   [48; HASH_SIZE],
             user_id:   [2; HASH_SIZE],
             signature: [49; HASH_SIZE],
@@ -137,7 +88,7 @@ fn main() {
         }
     }
 
-    let mut messages: Vec<Message> = Vec::with_capacity(100);
+    let mut messages: Vec<msg::Message> = Vec::with_capacity(100);
 
     let listener = TcpListener::bind(IP_PORT).unwrap();
 
@@ -166,7 +117,7 @@ fn main() {
             //     socket.send(http_parser::parse(buffer));
             // },
             MSG_PADDING => {  // recieved a new message
-                if let Some(msg) = Message::from_bytes(&buffer) {
+                if let Some(msg) = msg::Message::from_bytes(&buffer) {
                     messages.push(msg)
                 }
             },
