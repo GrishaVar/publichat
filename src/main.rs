@@ -1,28 +1,25 @@
 use std::{net::TcpListener, io::Read};
 
-type Hash = (u128, u128);
+type Hash = [u8; 32];
+type RSA = [u8; 5];  // todo: what is the correct length?
 
 
-const BAD_WORDS: [Hash; 4] = [
-    (0, 0),
-    (1, 1),
-    (2, 2),
-    (3, 3),
-];  // todo: add bad words hashes
 const IP_PORT: &str = "localhost:7878";
 const PADDING_SIZE: usize = 6;
 const CONTENT_SIZE: usize = 512;
+const HASH_SIZE: usize = std::mem::size_of::<Hash>();
+const RSA_SIZE: usize = std::mem::size_of::<RSA>();
 
 const MSG_PADDING: [u8; PADDING_SIZE] = *b"start\n";
 const FETCH_PADDING: [u8; PADDING_SIZE] = *b"fetch\n";
 const QUERY_PADDING: [u8; PADDING_SIZE] = *b"query\n";
 const END_PADDING: [u8; PADDING_SIZE] = *b"endend";
 
-const CHAT_ID_START: usize = PADDING_SIZE + 32;
-const USER_ID_START: usize = CHAT_ID_START + 32;
-const SIGNATURE_START: usize = USER_ID_START + 32;
-const RSA_PUB_START: usize = SIGNATURE_START + 32;
-const CONTENTS_START: usize = RSA_PUB_START + 32;
+const CHAT_ID_START: usize = PADDING_SIZE + HASH_SIZE;
+const USER_ID_START: usize = CHAT_ID_START + HASH_SIZE;
+const SIGNATURE_START: usize = USER_ID_START + HASH_SIZE;
+const RSA_PUB_START: usize = SIGNATURE_START + HASH_SIZE;
+const CONTENTS_START: usize = RSA_PUB_START + HASH_SIZE;
 const END_PADDING_START: usize = CONTENTS_START + CONTENT_SIZE;
 const PACKET_SIZE: usize = END_PADDING_START + PADDING_SIZE;
 
@@ -64,12 +61,18 @@ Total: 96
 */
 
 
+const BAD_WORDS: [Hash; 4] = [
+    [0; HASH_SIZE],
+    [1; HASH_SIZE],
+    [2; HASH_SIZE],
+    [3; HASH_SIZE],
+];  // todo: add bad words hashes
 
 struct Message {
     chat_id: Hash,
     user_id: Hash,
-    signature: (u128, u128),
-    rsa_pub: (u128, u128),  // todo: what type is this?
+    signature: Hash,
+    rsa_pub: RSA,  // todo: what type is this?
     contents: [u8; PACKET_SIZE],
 }  // 624 bytes big (without padding)
 
@@ -80,55 +83,66 @@ impl Message {
 
     fn from_bytes(bytes: &[u8; PACKET_SIZE]) -> Option<Message> {
         // check start and end paddings
-        if bytes[..PADDING_SIZE] != MSG_PADDING {return None}
+        if bytes[..PADDING_SIZE]      != MSG_PADDING {return None}
         if bytes[END_PADDING_START..] != END_PADDING {return None}
 
-        let to_hash = |pos: usize| (
-            u128::from_be_bytes(bytes[pos*32..][00..16].try_into().unwrap()),
-            u128::from_be_bytes(bytes[pos*32..][16..32].try_into().unwrap()),
-        );
-
         Some(Message {
-            chat_id: to_hash(0),
-            user_id: to_hash(1),
-            signature: to_hash(2),
-            rsa_pub: to_hash(3),
-            contents: bytes[CONTENTS_START..END_PADDING_START].try_into().unwrap(),
+            chat_id:   bytes[CHAT_ID_START..][..HASH_SIZE].try_into().ok()?,
+            user_id:   bytes[USER_ID_START..][..HASH_SIZE].try_into().ok()?,
+            signature: bytes[SIGNATURE_START..][..HASH_SIZE].try_into().ok()?,
+            rsa_pub:   bytes[RSA_PUB_START..][..RSA_SIZE].try_into().ok()?,
+            contents:  bytes[CONTENTS_START..][..CONTENT_SIZE].try_into().ok()?,
         })
     }
 
     fn to_bytes(&self) -> [u8; PACKET_SIZE] {
         let mut res: [u8; PACKET_SIZE] = [0; PACKET_SIZE];
-        res.copy_from_slice(&MSG_PADDING);    
 
-        let mut insert_hash = |pos: usize, hash: Hash| {
-            res[pos..].copy_from_slice(&hash.0.to_be_bytes());
-            res[pos+16..].copy_from_slice(&hash.1.to_be_bytes());
-        };
-        
-        insert_hash(CHAT_ID_START, self.chat_id);
-        insert_hash(USER_ID_START, self.user_id);
-        insert_hash(SIGNATURE_START, self.signature);
-        insert_hash(RSA_PUB_START, self.rsa_pub);
+        res.copy_from_slice(&MSG_PADDING);
+        res[CHAT_ID_START..].copy_from_slice(&self.chat_id);
+        res[USER_ID_START..].copy_from_slice(&self.user_id);
+        res[SIGNATURE_START..].copy_from_slice(&self.signature);
+        res[RSA_PUB_START..].copy_from_slice(&self.rsa_pub);
         res[CONTENTS_START..].copy_from_slice(&self.contents);
-
         res[END_PADDING_START..].copy_from_slice(&END_PADDING);    
         res
     }
+}
+
+enum Query {
+    Fetch {chat_id: Hash},
+
 }
 
 fn main() {
     let mut messages: Vec<Message> = Vec::with_capacity(100);
 
     let listener = TcpListener::bind(IP_PORT).unwrap();
+
     for stream in listener.incoming() {
         let mut stream = stream.unwrap();
+        // make new thread
+        
 
-        let mut buffer = [0; PACKET_SIZE];
+        let mut buffer = [0; PACKET_SIZE];  // instead of buffer, iterate over data
         stream.read(&mut buffer).unwrap();
 
-        
         match buffer[..PADDING_SIZE].try_into().unwrap() {
+            // match incoming data against one of these IN A LOOP:
+            /* Possible incoming requests:
+                1) HTTP
+                    1.1) HTTP GET (serve webpage). Close socket after this is done. (404, robots.txt, etc.)
+                    1.2) HTTP upgrade (Websocket). TODO: what if you do HTTP after upgrade?
+                2) "fetch\n" (get 50 latest from DB with chat_id)
+                3) "query\n" (arbitrary SQL query from DB) (must include chat)
+                4) "start\n" Send message (add to DB with time)
+            */
+            // "HTTP GET" => {
+            //     socket.send(http_parser::parse(buffer));
+            // },
+            // "HTTP UPGRADE" => {
+            //     socket.send(http_parser::parse(buffer));
+            // },
             MSG_PADDING => {  // recieved a new message
                 if let Some(msg) = Message::from_bytes(&buffer) {
                     messages.push(msg)
@@ -142,10 +156,6 @@ fn main() {
             }
             _ => continue
         }
-
-        
     }
-
-
-
 }
+
