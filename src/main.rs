@@ -1,8 +1,10 @@
 use std::{net::TcpListener, io::Read, path::Path};
-
-type Hash = [u8; 32];
-type RSA = [u8; 5];  // todo: what is the correct length?
 use rusqlite::{Connection, OpenFlags};
+
+mod db;
+
+pub type Hash = [u8; 32];
+pub type RSA = [u8; 5];  // todo: what is the correct length?
 
 
 const IP_PORT: &str = "localhost:7878";
@@ -69,7 +71,7 @@ const BAD_WORDS: [Hash; 4] = [
     [3; HASH_SIZE],
 ];  // todo: add bad words hashes
 
-struct Message {
+pub struct Message {
     chat_id: Hash,
     user_id: Hash,
     signature: Hash,
@@ -112,69 +114,8 @@ impl Message {
     }
 }
 
-enum Query {
+pub enum Query {
     Fetch {chat_id: Hash},
-}
-
-fn db_create(path: Option<&str>) -> Connection {
-    let conn = if let Some(path) = path {
-        Connection::open(path).expect("Failed to open path")
-    } else {
-        Connection::open_in_memory().expect("Failed to make new db")
-    };
-    conn.execute_batch("\
-        BEGIN; \
-        CREATE TABLE Messages ( \
-            chat      blob(64)  NOT NULL, \
-            user      blob(64)  NOT NULL, \
-            time      blob(16)  NOT NULL, \
-            rsa_pub   blob(64)  NOT NULL, \
-            signature blob(63)  NOT NULL, \
-            message   blob(512) NOT NULL \
-        ); \
-        COMMIT; \
-    ").expect("Failed to create table");
-    conn
-}
-
-fn db_add_msg(conn: &Connection, msg: Message) {
-    let mut stmt = conn.prepare_cached(
-        "INSERT INTO Messages (chat, user, time, rsa_pub, signature, message) \
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
-    ).expect("Failed to make cached add_msg query");
-    stmt.execute(&[
-        &msg.chat_id,
-        &msg.user_id,
-        &std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH).expect("Time travelers!")
-            .as_nanos().to_be_bytes()[..16],
-        &msg.rsa_pub,
-        &msg.signature,
-        &msg.contents,
-    ]).expect("Failed to add message");
-}
-
-fn db_fetch(conn: &Connection, chat_id: Hash) -> Vec<Message> {  // todo: consider returning iterator somehow?
-    let mut res = Vec::with_capacity(50);
-    let mut stmt = conn.prepare_cached(
-        "SELECT * FROM Messages WHERE chat = ? \
-        ORDER BY rowid DESC LIMIT 50"
-    ).expect("Failed to make cached fetch query");
-    let msgs = stmt.query_map([&chat_id], |row| Ok(Message {
-        chat_id: row.get(0).unwrap(),
-        user_id: row.get(1).unwrap(),
-        time: row.get(2).unwrap(),
-        rsa_pub: row.get(3).unwrap(),
-        signature: row.get(4).unwrap(),
-        contents: row.get(5).unwrap(),
-    })).expect("Failed to convert");
-    res.extend(msgs.map(|msg| msg.unwrap()));
-    println!("debug: {:?}", res.len());
-    res  // returns newest message first!!!
-}
-
-fn db_query(conn: &Connection, query: Query) -> Vec<Message> {
-    todo!();
 }
 
 fn main() {
@@ -189,24 +130,26 @@ fn main() {
                 })  // todo: assert the db is valid
         } else {
             println!("File {} not found; creating...", path);
-            db_create(Some(path))
+            db::create(Some(path))
         }
     } else {
         println!("No file path given; creating new DB in RAM");
-        db_create( None)
+        db::create( None)
     };
 
-    db_add_msg(&db_conn, Message {  // testing
-        chat_id:   [48; HASH_SIZE],
-        user_id:   [2; HASH_SIZE],
-        signature: [49; HASH_SIZE],
-        rsa_pub:   [48; RSA_SIZE],
-        contents:  [48; CONTENT_SIZE],
-        time: None,
-    });
+    {  // testing db
+        db::add_msg(&db_conn, Message {
+            chat_id:   [48; HASH_SIZE],
+            user_id:   [2; HASH_SIZE],
+            signature: [49; HASH_SIZE],
+            rsa_pub:   [48; RSA_SIZE],
+            contents:  [48; CONTENT_SIZE],
+            time: None,
+        });
 
-    for m in db_fetch(&db_conn, [48; HASH_SIZE]) {
-        println!("line: {:?}", m.user_id);
+        for m in db::fetch(&db_conn, [48; HASH_SIZE]) {
+            println!("line: {:?}", m.user_id);
+        }
     }
 
     let mut messages: Vec<Message> = Vec::with_capacity(100);
