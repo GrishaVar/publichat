@@ -1,5 +1,5 @@
-use std::{net::TcpListener, io::Read, path::Path};
-use rusqlite::{Connection, OpenFlags};
+use std::{net::TcpListener, io::Read, path::Path, sync::mpsc, thread};
+use rusqlite::Connection;
 
 mod db;
 mod msg;
@@ -56,34 +56,58 @@ pub enum Query {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let db_conn = if let Some(path) = args.last() {
+    let (db_reader, db_writer) = if let Some(path) = args.last() {
         if Path::new(path).is_file() {
             println!("Opening file {}...", path);
-            Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE)
-                .unwrap_or_else(|_| {
-                    println!("Failed to open file {}.", path);
-                    std::process::exit(1);
-                })  // todo: assert the db is valid
+            (  // todo: better way of opening two connections?
+                Connection::open(path)
+                    .unwrap_or_else(|_| {
+                        println!("Failed to open file {}.", path);
+                        std::process::exit(1);
+                    }),
+                Connection::open(path).unwrap()
+            )  // todo: assert the db is valid
         } else {
             println!("File {} not found; creating...", path);
-            db::create(Some(path))
+            (db::create(Some(path)), Connection::open(path).unwrap())
         }
     } else {
         println!("No file path given; creating new DB in RAM");
-        db::create( None)
+        (db::create( None), db::create( None))  // two seperate DBs?
     };
 
-    {  // testing db
-        db::add_msg(&db_conn, msg::Message {
+    let (sender, reciever) = mpsc::channel::<msg::Message>();
+    thread::spawn(move || while let Ok(msg) = reciever.recv() {
+        db::add_msg(&db_writer, msg);
+    });
+
+    {  // testing
+        sender.send(msg::Message {
             chat_id:   [48; HASH_SIZE],
-            user_id:   [2; HASH_SIZE],
+            user_id:   [0; HASH_SIZE],
             signature: [49; HASH_SIZE],
             rsa_pub:   [48; RSA_SIZE],
             contents:  [48; CONTENT_SIZE],
             time: None,
-        });
-
-        for m in db::fetch(&db_conn, [48; HASH_SIZE]) {
+        }).ok();
+        sender.send(msg::Message {
+            chat_id:   [48; HASH_SIZE],
+            user_id:   [11; HASH_SIZE],
+            signature: [49; HASH_SIZE],
+            rsa_pub:   [48; RSA_SIZE],
+            contents:  [48; CONTENT_SIZE],
+            time: None,
+        }).ok();
+        sender.send(msg::Message {
+            chat_id:   [48; HASH_SIZE],
+            user_id:   [88; HASH_SIZE],
+            signature: [49; HASH_SIZE],
+            rsa_pub:   [48; RSA_SIZE],
+            contents:  [48; CONTENT_SIZE],
+            time: None,
+        }).ok();
+        thread::sleep_ms(2);
+        for m in db::fetch(&db_reader, [48; HASH_SIZE]) {
             println!("line: {:?}", m.user_id);
         }
     }

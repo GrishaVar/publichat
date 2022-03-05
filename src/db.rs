@@ -55,7 +55,6 @@ pub fn fetch(conn: &Connection, chat_id: Hash) -> Vec<Message> {  // todo: consi
         contents: row.get(5).unwrap(),
     })).expect("Failed to convert");
     res.extend(msgs.map(|msg| msg.unwrap()));
-    println!("debug: {:?}", res.len());
     res  // returns newest message first!!!
 }
 
