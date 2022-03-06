@@ -5,9 +5,7 @@ mod msg;
 mod constants;
 use constants::*;
 
-pub type Hash = [u8; HASH_SIZE];
-pub type RSA = [u8; RSA_SIZE];
-pub type Contents = [u8; CONTENT_SIZE];
+
 
 const IP_PORT: &str = "localhost:7878";
 
@@ -70,16 +68,8 @@ fn main() {
 
     {  // testing db
         const COUNT: usize = 100;
-        let msgs: Vec<msg::Message> = (0..COUNT as u8).map(|i| {
-            msg::Message {
-                user_id:   [b'!' + i; HASH_SIZE],
-                chat_id:   [i + 1; HASH_SIZE],
-                signature: [i + 2; HASH_SIZE],
-                rsa_pub:   [i + 3; RSA_SIZE],  // todo: what type is this?
-                contents:  [i + 4; CONTENT_SIZE],
-                time: Some(i as u128),
-            }
-        }).collect();
+
+        let msgs: Vec<MessageSt> = (0..COUNT as u8).map(|i| {[i+b'!'; ST_SIZE]}).collect();
         let path = data_dir.join("test.msgs");
 
         let t1 = std::time::SystemTime::now();
@@ -92,7 +82,7 @@ fn main() {
         for i in 1..COUNT+1 {
             print!("{:3}:   ", i);
             for m in db::fetch(&path, Some(i)).unwrap() {
-                print!("{}", m.user_id[0] as char);
+                print!("{}", m[0] as char);
             }
             println!();
         }
@@ -110,7 +100,7 @@ fn main() {
         // make new thread
         
 
-        let mut buffer = [0; PACKET_SIZE];  // instead of buffer, iterate over data
+        let mut buffer = [0; NET_IN_SIZE];  // instead of buffer, iterate over data
         stream.read(&mut buffer).unwrap();
 
         match buffer[..PADDING_SIZE].try_into().unwrap() {

@@ -1,71 +1,29 @@
 use crate::constants::*;
-use crate::{Hash, RSA, Contents};
+use crate::Hash;
 
-const BAD_WORDS: [Hash; 4] = [
-    [0; HASH_SIZE],
-    [1; HASH_SIZE],
-    [2; HASH_SIZE],
-    [3; HASH_SIZE],
-];  // todo: add bad words hashes
+pub fn packet_to_storage(src: &[u8; NET_IN_SIZE], dest: &mut [u8; ST_SIZE]) -> Option<Hash> {
+    // Takes bytes from client, 
+    // Extract RSA pub, cypher, signature. Generate time.
+    // Write buffer intended for storage into dest.
+    // Return chat_id if successful
 
-pub struct Message {
-    pub chat_id: Hash,
-    pub user_id: Hash,
-    pub signature: Hash,
-    pub rsa_pub: RSA,  // todo: what type is this?
-    pub contents: Contents,
-    pub time: Option<u128>,
-}  // 624 bytes big (without padding)
+    if src[..PADDING_SIZE]       != MSG_PADDING {return None}
+    if src[NET_IN_END_PADDING..] != END_PADDING {return None}
+    
+    let msg_time = std::time::SystemTime::now().duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap().as_nanos();
+    dest[..TIME_SIZE].clone_from_slice(&u128::to_be_bytes(msg_time));
+    dest[ST_RSA_START..].clone_from_slice(&src[NET_IN_RSA..NET_IN_END_PADDING]);
 
-impl Message {
-    fn is_bad_word(&self) -> bool {
-        BAD_WORDS.contains(&self.chat_id)
-    }
+    // return the chat ID
+    let mut chat_id = [0; HASH_SIZE];
+    chat_id.clone_from_slice(&src[NET_IN_CHAT_ID..][..HASH_SIZE]);
+    Some(chat_id)
+}
 
-    pub fn from_packet(bytes: &[u8; PACKET_SIZE]) -> Option<Message> {
-        // check start and end paddings
-        if bytes[..PADDING_SIZE]      != MSG_PADDING {return None}
-        if bytes[END_PADDING_START..] != END_PADDING {return None}
-
-        Some(Message {
-            chat_id:   bytes[CHAT_ID_START..][..HASH_SIZE].try_into().ok()?,
-            user_id:   bytes[USER_ID_START..][..HASH_SIZE].try_into().ok()?,
-            signature: bytes[SIGNATURE_START..][..HASH_SIZE].try_into().ok()?,
-            rsa_pub:   bytes[RSA_PUB_START..][..RSA_SIZE].try_into().ok()?,
-            contents:  bytes[CONTENTS_START..][..CONTENT_SIZE].try_into().ok()?,
-            time:      None,
-        })
-    }
-
-    pub fn to_packet(&self) -> [u8; PACKET_SIZE] {
-        let mut res: [u8; PACKET_SIZE] = [0; PACKET_SIZE];
-
-        res[PADDING_START..].copy_from_slice(&MSG_PADDING);
-        res[CHAT_ID_START..].copy_from_slice(&self.chat_id);
-        res[USER_ID_START..].copy_from_slice(&self.user_id);
-        res[SIGNATURE_START..].copy_from_slice(&self.signature);
-        res[RSA_PUB_START..].copy_from_slice(&self.rsa_pub);
-        res[CONTENTS_START..].copy_from_slice(&self.contents);
-        res[END_PADDING_START..].copy_from_slice(&END_PADDING);    
-        res
-    }
-
-    pub fn from_storage(bytes: &[u8; ST_SIZE]) -> Option<Message> {
-        Some(Message {
-            time:      Some(u128::from_be_bytes(bytes[ST_TIME_START..][..TIME_SIZE].try_into().ok()?)),
-            chat_id:   [0; HASH_SIZE],
-            user_id:   bytes[ST_USER_START..][..HASH_SIZE].try_into().ok()?,
-            contents:  bytes[ST_CONT_START..][..CONTENT_SIZE].try_into().ok()?,
-            signature: [0; HASH_SIZE],
-            rsa_pub:   [0; RSA_SIZE],
-        })
-    }
-
-    pub fn to_storage(&self) -> [u8; ST_SIZE] {
-        let mut res: [u8; ST_SIZE] = [0; ST_SIZE];
-        res[ST_TIME_START..][..TIME_SIZE].copy_from_slice(&self.time.unwrap().to_be_bytes());  // todo: possible error?
-        res[ST_USER_START..][..HASH_SIZE].copy_from_slice(&self.user_id);
-        res[ST_CONT_START..][..CONTENT_SIZE].copy_from_slice(&self.contents);
-        res
-    }
+pub fn storage_to_packet(src: &[u8; ST_SIZE], dest: &mut [u8; NET_OUT_SIZE], msg_id: u32) {
+    // Takes bytes from chat file
+    // adds the chat id and message id
+    // Returns nothing but has side affects
+    dest[..NET_OUT_TIME].clone_from_slice(&msg_id.to_be_bytes());
+    dest[NET_OUT_TIME..].clone_from_slice(&src[..]);
 }

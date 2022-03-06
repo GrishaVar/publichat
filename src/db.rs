@@ -2,22 +2,23 @@ use std::io::{Seek, SeekFrom, Read, BufReader, Write};
 use std::path::PathBuf;
 use std::fs::OpenOptions;
 
-use crate::msg::Message;
+use crate::MessageSt;
 use crate::constants::*;
 
 const FETCH_SIZE: usize = 50;
 const FETCH_BLOCK_SIZE: usize = FETCH_SIZE * ST_SIZE;
 
-pub fn push(path: &PathBuf, msg: &Message) -> std::io::Result<()> {
+pub fn push(path: &PathBuf, msg: &[u8; ST_SIZE]) -> std::io::Result<()> {
     let mut file = OpenOptions::new()
         .append(true)  // no reading or writing, only append
         .create(true)  // create file if it doesn't already exist
         .open(path)?;
-    file.write(&msg.to_storage())?;
+    file.write(msg)?;
     Ok(())
 }
 
-pub fn fetch(path: &PathBuf, up_to: Option<usize>) -> std::io::Result<Vec<Message>> {
+
+pub fn fetch(path: &PathBuf, up_to: Option<usize>) -> std::io::Result<Vec<MessageSt>> {
     let mut file = match OpenOptions::new().read(true).open(path) {
         Ok(file) => file,
         _ => return Ok(vec![]),
@@ -51,7 +52,7 @@ pub fn fetch(path: &PathBuf, up_to: Option<usize>) -> std::io::Result<Vec<Messag
     let mut buff = [0; ST_SIZE];
     for _ in 0..up_to.unwrap_or(FETCH_SIZE).min(FETCH_SIZE) {
         file.read_exact(&mut buff).unwrap();
-        res.push(Message::from_storage(&buff).unwrap());
+        res.push(buff);
     }
 
     Ok(res)
