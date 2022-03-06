@@ -1,5 +1,4 @@
-use std::{net::TcpListener, io::Read, path::Path, sync::mpsc, thread};
-use rusqlite::Connection;
+use std::{net::TcpListener, io::Read, path::Path};
 
 mod db;
 mod msg;
@@ -56,63 +55,53 @@ pub enum Query {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let (db_reader, db_writer) = if let Some(path) = args.last() {
-        if Path::new(path).is_file() {
-            println!("Opening file {}...", path);
-            (  // todo: better way of opening two connections?
-                Connection::open(path)
-                    .unwrap_or_else(|_| {
-                        println!("Failed to open file {}.", path);
-                        std::process::exit(1);
-                    }),
-                Connection::open(path).unwrap()
-            )  // todo: assert the db is valid
-        } else {
-            println!("File {} not found; creating...", path);
-            (db::create(Some(path)), Connection::open(path).unwrap())
+    let data_dir = if let Some(path) = args.last() {
+        let path = Path::new(path);
+        if !path.is_dir() {
+            println!("Not a directory: {:?}", path);
+            std::process::exit(1);
         }
+        path
     } else {
-        println!("No file path given; creating new DB in RAM");
-        (db::create( None), db::create( None))  // two seperate DBs?
+        println!("No path given");
+        std::process::exit(1);
     };
+    println!("Using directory {:?}", data_dir.canonicalize().unwrap());
 
-    let (sender, reciever) = mpsc::channel::<msg::Message>();
-    thread::spawn(move || while let Ok(msg) = reciever.recv() {
-        db::add_msg(&db_writer, msg);
-    });
+    {  // testing db
+        const COUNT: usize = 100;
+        let msgs: Vec<msg::Message> = (0..COUNT as u8).map(|i| {
+            msg::Message {
+                user_id:   [b'!' + i; HASH_SIZE],
+                chat_id:   [i + 1; HASH_SIZE],
+                signature: [i + 2; HASH_SIZE],
+                rsa_pub:   [i + 3; RSA_SIZE],  // todo: what type is this?
+                contents:  [i + 4; CONTENT_SIZE],
+                time: Some(i as u128),
+            }
+        }).collect();
+        let path = data_dir.join("test.msgs");
 
-    {  // testing
-        sender.send(msg::Message {
-            chat_id:   [48; HASH_SIZE],
-            user_id:   [0; HASH_SIZE],
-            signature: [49; HASH_SIZE],
-            rsa_pub:   [48; RSA_SIZE],
-            contents:  [48; CONTENT_SIZE],
-            time: None,
-        }).ok();
-        sender.send(msg::Message {
-            chat_id:   [48; HASH_SIZE],
-            user_id:   [11; HASH_SIZE],
-            signature: [49; HASH_SIZE],
-            rsa_pub:   [48; RSA_SIZE],
-            contents:  [48; CONTENT_SIZE],
-            time: None,
-        }).ok();
-        sender.send(msg::Message {
-            chat_id:   [48; HASH_SIZE],
-            user_id:   [88; HASH_SIZE],
-            signature: [49; HASH_SIZE],
-            rsa_pub:   [48; RSA_SIZE],
-            contents:  [48; CONTENT_SIZE],
-            time: None,
-        }).ok();
-        thread::sleep_ms(2);
-        for m in db::fetch(&db_reader, [48; HASH_SIZE]) {
-            println!("line: {:?}", m.user_id);
+        let t1 = std::time::SystemTime::now();
+        for msg in msgs.iter() {db::push(&path, &msg).unwrap()}
+
+        let t2 = std::time::SystemTime::now();
+        for _ in 0..COUNT {db::fetch(&path, None).unwrap();}
+
+        let t3 = std::time::SystemTime::now();
+        for i in 1..COUNT+1 {
+            print!("{:3}:   ", i);
+            for m in db::fetch(&path, Some(i)).unwrap() {
+                print!("{}", m.user_id[0] as char);
+            }
+            println!();
         }
-    }
 
-    let mut messages: Vec<msg::Message> = Vec::with_capacity(100);
+        let t4 = std::time::SystemTime::now();
+        println!("Pushing 100 messages: {}μs", t2.duration_since(t1).unwrap().as_micros());
+        println!("Fetching last 100 times: {}μs", t3.duration_since(t2).unwrap().as_micros());
+        println!("Fetching mid 100 times: {}μs", t4.duration_since(t3).unwrap().as_micros());
+    }
 
     let listener = TcpListener::bind(IP_PORT).unwrap();
 
@@ -141,9 +130,7 @@ fn main() {
             //     socket.send(http_parser::parse(buffer));
             // },
             MSG_PADDING => {  // recieved a new message
-                if let Some(msg) = msg::Message::from_bytes(&buffer) {
-                    messages.push(msg)
-                }
+
             },
             FETCH_PADDING => {  // recieved request for messages
                 
