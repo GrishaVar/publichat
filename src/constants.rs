@@ -1,3 +1,5 @@
+#![allow(dead_code)]  // unused constants
+
 pub const PADDING_SIZE: usize = 6;
 pub const HASH_SIZE: usize = 32;
 pub const SIG_SIZE: usize = HASH_SIZE;
