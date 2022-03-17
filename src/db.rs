@@ -5,8 +5,7 @@ use std::fs::OpenOptions;
 use crate::MessageSt;
 use crate::constants::*;
 
-const FETCH_SIZE: usize = 50;
-const FETCH_BLOCK_SIZE: usize = FETCH_SIZE * ST_SIZE;
+const FETCH_SIZE: u8 = 50;
 
 pub fn push(path: &PathBuf, msg: &[u8; ST_SIZE]) -> std::io::Result<()> {
     let mut file = OpenOptions::new()
@@ -17,41 +16,66 @@ pub fn push(path: &PathBuf, msg: &[u8; ST_SIZE]) -> std::io::Result<()> {
     Ok(())
 }
 
-
-pub fn fetch(path: &PathBuf, up_to: Option<usize>) -> std::io::Result<Vec<MessageSt>> {
+pub fn fetch_latest(path: &PathBuf, count: u8) -> std::io::Result<Vec<MessageSt>> {
     let mut file = match OpenOptions::new().read(true).open(path) {
         Ok(file) => file,
-        _ => return Ok(vec![]),
+        _ => return Ok(Vec::new()),  // no file => no contents
     };
 
-    let size: usize = file.metadata()?.len() as usize;
-    let (len, rem) = (size / ST_SIZE, size % ST_SIZE);  // compiler!
-    assert_eq!(rem, 0);  // todo: remove?
-
-    if let Some(up_to) = up_to {  // skip if too far ahead
-        if up_to as usize > len {
-            return Ok(vec![])
-        }
+    if let Err(_) = file.seek(SeekFrom::End(-(count as i64))) {
+        file.seek(SeekFrom::Start(0))?;
     }
 
-    if size > FETCH_BLOCK_SIZE {  // no seeking if fewer than 50 messages
-        if let Some(up_to) = up_to {
-            // return 50 before up_to (no including)
-            if up_to > FETCH_SIZE {  // too far behind => don't seek
-                let from = (up_to - FETCH_SIZE) * ST_SIZE;
-                file.seek(SeekFrom::Start(from as u64))?;
-            }
-        } else {
-            // return last 50
-            file.seek(SeekFrom::End(-((FETCH_SIZE * ST_SIZE) as i64)))?;
-        }
-    }
-
-    let mut file = BufReader::new(file);  // speeds up read by 2-3x!
-    let mut res = Vec::with_capacity(FETCH_SIZE);
+    let mut file = BufReader::new(file);
+    let mut res = Vec::with_capacity(count.into());
     let mut buff = [0; ST_SIZE];
-    for _ in 0..up_to.unwrap_or(FETCH_SIZE).min(FETCH_SIZE) {
-        file.read_exact(&mut buff).unwrap();
+    for _ in 0..count {
+        if let Err(_) = file.read_exact(&mut buff) { break }
+        res.push(buff);
+    }
+
+    Ok(res)
+}
+
+
+pub fn fetch(
+    path: &PathBuf,
+    id: u32,  // from which message
+    count: u8,  // how many messages
+    forward: bool,  // search forward of backward in time
+) -> std::io::Result<Vec<MessageSt>> {
+    if count == 0 {return Ok(Vec::new())}  // nothing to return
+    if !forward && id == 0 {return Ok(Vec::new())}  // nothing behind 0
+    if count > FETCH_SIZE {return Ok(Vec::new())}  // request too many, return nothing
+
+    let mut file = match OpenOptions::new().read(true).open(path) {
+        Ok(file) => file,
+        _ => return Ok(Vec::new()),  // no file => no contents
+    };
+
+    let db_size = file.metadata()?.len() as u32;
+    let db_len  = db_size / ST_SIZE as u32;
+    assert_eq!(db_len * ST_SIZE as u32, db_size);  // todo: remove?
+
+    if id > db_len {return Ok(Vec::new())} // outside of range, return nothing
+    if forward && id >= db_len-1 {return Ok(Vec::new())}  // nothing ahead of db_len
+
+    let count: u32 = count.into();
+    let (start, len) = match forward {
+        true => (id + 1, count.min(db_len - id - 1)),  // don't overshoot
+        false => match id.checked_sub(count) {
+            Some(start) => (start, count),  // fits perfectly
+            None => (0, id),  // too far left, get first id messages
+        }
+    };
+
+    // file.seek(SeekFrom::Start(30))?;
+    file.seek(SeekFrom::Start(start as u64 * ST_SIZE as u64))?;
+    let mut file = BufReader::new(file);
+    let mut res = Vec::with_capacity(len as usize);
+    let mut buff = [0; ST_SIZE];
+    for _ in 0..len {
+        file.read_exact(&mut buff)?;
         res.push(buff);
     }
 

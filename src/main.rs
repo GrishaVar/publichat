@@ -67,7 +67,7 @@ fn main() {
     println!("Using directory {:?}", data_dir.canonicalize().unwrap());
 
     {  // testing db
-        const COUNT: usize = 100;
+        const COUNT: usize = 25;  // no more than 94
 
         let msgs: Vec<MessageSt> = (0..COUNT as u8).map(|i| {[i+b'!'; ST_SIZE]}).collect();
         let path = data_dir.join("test.msgs");
@@ -76,21 +76,27 @@ fn main() {
         for msg in msgs.iter() {db::push(&path, &msg).unwrap()}
 
         let t2 = std::time::SystemTime::now();
-        for _ in 0..COUNT {db::fetch(&path, None).unwrap();}
+        for i in 0..COUNT {
+            print!("Forward {:3}:   ", i);
+            for m in db::fetch(&path, i as u32, 20, true).unwrap() {
+                print!("{}", m[0] as char);
+            }
+            println!();
+        }
 
         let t3 = std::time::SystemTime::now();
-        for i in 1..COUNT+1 {
-            print!("{:3}:   ", i);
-            for m in db::fetch(&path, Some(i)).unwrap() {
+        for i in 0..COUNT {
+            print!("Bckward {:3}:   ", i);
+            for m in db::fetch(&path, i as u32, 20, false).unwrap() {
                 print!("{}", m[0] as char);
             }
             println!();
         }
 
         let t4 = std::time::SystemTime::now();
-        println!("Pushing 100 messages: {}μs", t2.duration_since(t1).unwrap().as_micros());
-        println!("Fetching last 100 times: {}μs", t3.duration_since(t2).unwrap().as_micros());
-        println!("Fetching mid 100 times: {}μs", t4.duration_since(t3).unwrap().as_micros());
+        println!("Pushing {} messages: {}μs",       COUNT, t2.duration_since(t1).unwrap().as_micros());
+        println!("Fetching forward {} times: {}μs", COUNT, t3.duration_since(t2).unwrap().as_micros());
+        println!("Fetching bckward {} times: {}μs", COUNT, t4.duration_since(t3).unwrap().as_micros());
     }
 
     let listener = TcpListener::bind(IP_PORT).unwrap();
