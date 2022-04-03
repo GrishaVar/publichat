@@ -7,7 +7,7 @@ use crate::constants::*;
 
 const FETCH_SIZE: u8 = 50;
 
-pub fn push(path: &PathBuf, msg: &[u8; ST_SIZE]) -> std::io::Result<()> {
+pub fn push(path: &PathBuf, msg: &[u8; MSG_ST_SIZE]) -> std::io::Result<()> {
     let mut file = OpenOptions::new()
         .append(true)  // no reading or writing, only append
         .create(true)  // create file if it doesn't already exist
@@ -28,7 +28,7 @@ pub fn fetch_latest(path: &PathBuf, count: u8) -> std::io::Result<Vec<MessageSt>
 
     let mut file = BufReader::new(file);
     let mut res = Vec::with_capacity(count.into());
-    let mut buff = [0; ST_SIZE];
+    let mut buff = [0; MSG_ST_SIZE];
     for _ in 0..count {
         if let Err(_) = file.read_exact(&mut buff) { break }
         res.push(buff);
@@ -42,7 +42,7 @@ pub fn fetch(
     path: &PathBuf,
     id: u32,  // from which message
     count: u8,  // how many messages
-    forward: bool,  // search forward of backward in time
+    forward: bool,  // search forward or backward in time
 ) -> std::io::Result<Vec<MessageSt>> {
     if count == 0 {return Ok(Vec::new())}  // nothing to return
     if !forward && id == 0 {return Ok(Vec::new())}  // nothing behind 0
@@ -54,8 +54,8 @@ pub fn fetch(
     };
 
     let db_size = file.metadata()?.len() as u32;
-    let db_len  = db_size / ST_SIZE as u32;
-    assert_eq!(db_len * ST_SIZE as u32, db_size);  // todo: remove?
+    let db_len  = db_size / MSG_ST_SIZE as u32;
+    assert_eq!(db_len * MSG_ST_SIZE as u32, db_size);  // todo: remove?
 
     if id > db_len {return Ok(Vec::new())} // outside of range, return nothing
     if forward && id >= db_len-1 {return Ok(Vec::new())}  // nothing ahead of db_len
@@ -70,10 +70,10 @@ pub fn fetch(
     };
 
     // file.seek(SeekFrom::Start(30))?;
-    file.seek(SeekFrom::Start(start as u64 * ST_SIZE as u64))?;
+    file.seek(SeekFrom::Start(start as u64 * MSG_ST_SIZE as u64))?;
     let mut file = BufReader::new(file);
     let mut res = Vec::with_capacity(len as usize);
-    let mut buff = [0; ST_SIZE];
+    let mut buff = [0; MSG_ST_SIZE];
     for _ in 0..len {
         file.read_exact(&mut buff)?;
         res.push(buff);
