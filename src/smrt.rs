@@ -14,6 +14,12 @@ fn get_chat_file(chat_id: &Hash, data_dir: &Path) -> std::path::PathBuf {
     data_dir.join(base64::encode(chat_id))
 }
 
+fn send_messages(stream: &mut TcpStream, msgs: &Vec<MessageSt>) {
+    // converts MessageSt to MessageOut and sends each into stream
+    // msg::storage_to_packet
+    // TcpStream::write
+    todo!()
+}
 
 pub fn handle(mut stream: TcpStream, data_dir: &Arc<Path>) {
     let mut pad_buf = [0; PADDING_SIZE];
@@ -64,6 +70,7 @@ pub fn handle(mut stream: TcpStream, data_dir: &Arc<Path>) {
                 let messages = db::query(&path, id, count, forward);
 
                 // TODO send messages back to the client with a function
+                send_messages(&mut stream, &messages.unwrap())
             },
             _ => return,  // invalid padding  todo: respond with error
         }
