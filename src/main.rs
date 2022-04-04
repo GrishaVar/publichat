@@ -22,7 +22,6 @@ fn handle_incoming(mut stream: std::net::TcpStream, data_dir: Arc<Path>) {
     }
 }
 
-
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let data_dir = if let Some(path) = args.last() {

@@ -10,6 +10,8 @@ pub const QUERY_ARG_SIZE: usize = std::mem::size_of::<u32>();
 pub const TIME_SIZE: usize = std::mem::size_of::<u128>();
 pub const MSG_ID_SIZE: usize = std::mem::size_of::<u32>();
  
+pub const DEFAULT_FETCH_AMOUNT: u8 = 50;
+
 pub type Hash       = [u8; HASH_SIZE];
 pub type RSA        = [u8; RSA_SIZE];
 pub type Contents   = [u8; CYPHER_SIZE];
