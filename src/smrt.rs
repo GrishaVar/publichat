@@ -21,7 +21,7 @@ fn send_messages(stream: &mut TcpStream, msgs: &Vec<MessageSt>) {
     todo!()
 }
 
-pub fn handle(mut stream: TcpStream, data_dir: &Arc<Path>) {
+pub fn handle(stream: &mut TcpStream, data_dir: &Arc<Path>) {
     let mut pad_buf = [0; PADDING_SIZE];
     let mut snd_buf = [0; MSG_IN_SIZE];  // size of msg packet
     let mut chat_id_buf = [0; CHAT_ID_SIZE];
@@ -70,9 +70,9 @@ pub fn handle(mut stream: TcpStream, data_dir: &Arc<Path>) {
                 let messages = db::query(&path, id, count, forward);
 
                 // TODO send messages back to the client with a function
-                send_messages(&mut stream, &messages.unwrap())
+                send_messages(stream, &messages.unwrap())
             },
-            _ => return,  // invalid padding  todo: respond with error
+            _ => println!("{:?}", pad_buf.map(char::from)),  // invalid padding  todo: respond with error
         }
     }
 }

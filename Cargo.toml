@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 base64 = "0.13.0"
+sha1_smol = "1.0.0"
