@@ -96,15 +96,17 @@ fn handle_smrt(mut stream: std::net::TcpStream, data_dir: &Path) {
                 db::push(&get_chat_file(&chat_id_buf, data_dir), &st_buf);
             },
             FETCH_PADDING => {
-                stream.read_exact(&mut chat_id_buf).expect("failed to read fch");
-                stream.read_exact(&mut pad_buf).expect("failed to read end pad");
-
-
-                
                 // fill fetch buffer
+                stream.read_exact(&mut chat_id_buf).expect("failed to read fch chat id");
+                stream.read_exact(&mut pad_buf).expect("failed to read end pad");  // todo: don't crash!
+                
                 // check "end"
-                // return fetch
-                //fetch_latest(path: &PathBuf, count: u8)
+                if pad_buf != END_PADDING { todo!() }  // verify end padding
+
+                // get arguments for the db fetch
+                let path = get_chat_file(&chat_id_buf, data_dir);
+
+                let messages = db::fetch_latest(&path, DEFAULT_FETCH_AMOUNT);
 
                 // TODO send messages back to the client with a function
             },
