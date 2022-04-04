@@ -1,5 +1,4 @@
 use crate::constants::*;
-use crate::Hash;
 
 pub fn packet_to_storage(src: &[u8; MSG_IN_SIZE], dest: &mut [u8; MSG_ST_SIZE]) -> Hash {
     // Takes bytes from client, 

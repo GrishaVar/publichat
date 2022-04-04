@@ -61,7 +61,7 @@ pub fn handle(mut stream: TcpStream, data_dir: &Arc<Path>) {
                 let path = get_chat_file(&chat_id_buf, data_dir);
                 
                 // return query
-                let messages = db::fetch(&path, id, count, forward);
+                let messages = db::query(&path, id, count, forward);
 
                 // TODO send messages back to the client with a function
             },

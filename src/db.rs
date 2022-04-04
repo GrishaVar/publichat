@@ -16,7 +16,7 @@ pub fn push(path: &PathBuf, msg: &[u8; MSG_ST_SIZE]) -> std::io::Result<()> {
     Ok(())
 }
 
-pub fn fetch_latest(path: &PathBuf, count: u8) -> std::io::Result<Vec<MessageSt>> {
+pub fn fetch(path: &PathBuf, count: u8) -> std::io::Result<Vec<MessageSt>> {
     let mut file = match OpenOptions::new().read(true).open(path) {
         Ok(file) => file,
         _ => return Ok(Vec::new()),  // no file => no contents
@@ -38,7 +38,7 @@ pub fn fetch_latest(path: &PathBuf, count: u8) -> std::io::Result<Vec<MessageSt>
 }
 
 
-pub fn fetch(
+pub fn query(
     path: &PathBuf,
     id: u32,  // from which message
     count: u8,  // how many messages

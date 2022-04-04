@@ -1,7 +1,5 @@
 use std::{net::TcpListener, io::Read, path::Path, sync::Arc};
 
-extern crate base64;
-
 mod db;
 mod msg;
 mod constants;
@@ -10,45 +8,7 @@ mod smrt;
 use constants::*;
 
 
-
 const IP_PORT: &str = "localhost:7878";
-
-/* Single "send message" packet structure
-
-"start\n": 6, [115, 116, 97, 114, 116, 10];
-chat_id: 32,
-user_id: 32,
-signature: 32,
-rsa_pub: 32,
-contents: 512,
-"endend": 6, [101, 110, 100, 101, 110, 100]
-
-Total: 652
-*/
-
-
-/* Fetch 100 latest messages in chat
-
-"fetch\n": 6, [102, 101, 116, 99, 104, 10];
-chat_id: 32,
-"endend": 6, [101, 110, 100, 101, 110, 100]
-
-Total: 44
-*/
-
-
-/* Advanced fetching of messages
-
-"query\n": 6,
-chat_id: 32,
-user_id: 32,
-time: 8,  messages starting from this time
-time_reverse: 8,  messages ending from this time
-num_messages: 4,
-"endend": 6, [101, 110, 100, 101, 110, 100]
-
-Total: 96
-*/
 
 
 fn handle_incoming(mut stream: std::net::TcpStream, data_dir: Arc<Path>) {
@@ -61,23 +21,6 @@ fn handle_incoming(mut stream: std::net::TcpStream, data_dir: Arc<Path>) {
         _ => return,
     }
 }
-
-
-        // match incoming data against one of these IN A LOOP:
-        /* Possible incoming requests:
-            1) HTTP
-                1.1) HTTP GET (serve webpage). Close socket after this is done. (404, robots.txt, etc.)
-                1.2) HTTP upgrade (Websocket). TODO: what if you do HTTP after upgrade?
-            2) "fetch\n" (get 50 latest from DB with chat_id)
-            3) "query\n" (arbitrary SQL query from DB) (must include chat)
-            4) "start\n" Send message (add to DB with time)
-        */
-        // "HTTP GET" => {
-        //     socket.send(http_parser::parse(buffer));
-        // },
-        // "HTTP UPGRADE" => {
-        //     socket.send(http_parser::parse(buffer));
-        // },
 
 
 fn main() {
@@ -106,20 +49,12 @@ fn main() {
 
         let t2 = std::time::SystemTime::now();
         for i in 0..COUNT {
-            print!("Forward {:3}:   ", i);
-            for m in db::fetch(&path, i as u32, 20, true).unwrap() {
-                print!("{}", m[0] as char);
-            }
-            println!();
+            db::query(&path, i as u32, 20, true).unwrap();
         }
 
         let t3 = std::time::SystemTime::now();
         for i in 0..COUNT {
-            print!("Bckward {:3}:   ", i);
-            for m in db::fetch(&path, i as u32, 20, false).unwrap() {
-                print!("{}", m[0] as char);
-            }
-            println!();
+            db::query(&path, i as u32, 20, false).unwrap();
         }
 
         let t4 = std::time::SystemTime::now();
@@ -136,8 +71,4 @@ fn main() {
             std::thread::spawn(move || handle_incoming(stream, data_dir));
         }
     }
-
-
-    
 }
-
