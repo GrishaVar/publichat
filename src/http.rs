@@ -14,14 +14,13 @@ fn handle_file(file: &str, stream: &mut TcpStream) {
         file.len(),
         file,
     ).as_bytes()).unwrap();
-    stream.flush().unwrap();
 }
 
 fn handle_ws(req: &String, stream: &mut TcpStream, data_dir: &Arc<Path>) {
     println!("handling ws");
     // handshake
     let key_in = match req.split("Sec-WebSocket-Key: ").nth(1) {
-        Some(x) => &x[..24],
+        Some(val) => &val[..24],
         _ => {handle_code(stream, 400); return},
     };
     let mut hasher = Sha1::new();
@@ -48,7 +47,6 @@ fn handle_ws(req: &String, stream: &mut TcpStream, data_dir: &Arc<Path>) {
 fn handle_code(stream: &mut TcpStream, code: u16) {
     println!("handling {}", code);
     stream.write(format!("HTTP/1.1 {}\r\n\r\n", code).as_bytes()).unwrap();
-    stream.flush().unwrap();
 }
 
 fn handle_robots(stream: &mut TcpStream) {
@@ -57,7 +55,6 @@ fn handle_robots(stream: &mut TcpStream) {
         b"HTTP/1.1 200\r\nContent-Length: 25\r\n\r\n\
         User-agent: *\nDisallow: /"
     ).unwrap();
-    stream.flush().unwrap();
 }
 
 pub fn handle(stream: &mut TcpStream, data_dir: &Arc<Path>) {
@@ -75,8 +72,9 @@ pub fn handle(stream: &mut TcpStream, data_dir: &Arc<Path>) {
     match path {
         "/" | ""        => handle_file("page/index.html", stream),
         "/jspack.js"    => handle_file("page/jspack.js", stream),  // todo: remove
-        "/ws"           => handle_ws(&req, stream, data_dir),  // start WS
+        "/ws"           => {handle_ws(&req, stream, data_dir); return},  // start WS
         "/robots.txt"   => handle_robots(stream),
         _               => handle_code(stream, 404),  // reject everything else
     };
+    stream.flush().unwrap();
 }
