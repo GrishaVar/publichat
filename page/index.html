@@ -10,104 +10,101 @@
   <script type="text/javascript">
     main = function() {
       document.getElementById('circle').onclick = function() {message_to_bytes()};
-      //var ip = location.host.split(":")[0] + ":9092";
-      //var ip_port_format = 'ws://' + ip_port + /ws/ + name;
-      //const socket = new WebSocket(ip_port_format);
-      //socket.onopen = function() {
-      //console.log("socket opened");
-      //};
+      var ip_port = location.host.split(":")[0] + ":7878";
+      var ip_port_format = 'ws://' + ip_port + /ws/;
+      const socket = new WebSocket(ip_port_format);
+      socket.onopen = function() {console.log("socket opened");};
+      socket.onerror = function(e) {console.log('ws error!'+e.code+e.reason);};
+      socket.onclose = function(e) {console.log('ws closed!'+e.code+e.reason);};
+      socket.onmessage = function(e) {console.log("recieved:\n" + e.data);};
+      function ws_send(bytes) {
+        socket.send(bytes);
+              // For printing and debugging
+        var outbound_hex = aesjs.utils.hex.fromBytes(bytes);
+        console.log("Sent: " + outbound_hex);
+      }
 
-/*
-      // The counter mode of operation maintains internal state, so to
-      // decrypt a new instance must be instantiated.
-      var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, new aesjs.Counter(1));
-      var decryptedBytes = aes_cnt.decrypt(encrypted_bytes);
+      function get_title(){return document.getElementById('title').value;}
+      function get_password(){return document.getElementById('password').value;}
+      function get_message(){return document.getElementById('message_entry').value;}
 
-      // Convert our bytes back into text
-      var decryptedText = aesjs.utils.utf8.fromBytes(decryptedBytes);
-      console.log(decryptedText);
-      // "Text may be any length you wish, no padding is required."*/
-    };
-    /*socket.onerror = function(e) {console.log('ws error!'+e.code+e.reason);};
-    socket.onclose = function(e) {console.log('ws closed!'+e.code+e.reason);};
-    socket.onmessage = function(e) {
-      //console.log("recieved:\n" + e.data);
-    };*/
+      function message_to_bytes() {      
+        // message: ["snd", chat_id, user_id, cypher, "end"]
+        var title = get_title();        // known by peers
+        var password = get_password();  // private
+        var message = get_message();    // known by peers
+        var epoc_time = Date.now();     // known by peers
 
+        var chat_key = sha3_256.array(title);  // known by peers
+        var chat_id = sha3_256.array(chat_key);  // chat key is public
+        var user_id = sha3_256.array(password);  // user id is public
 
-    function get_title(){return document.getElementById('title').value;}
-    function get_password(){return document.getElementById('password').value;}
-    function get_message(){return document.getElementById('message_entry').value;}
+        message = message.padEnd(128);
+        var text_bytes = aesjs.utils.utf8.toBytes(message);
+        var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, new aesjs.Counter(1));
+        var encrypted_bytes = aes_cnt.encrypt(text_bytes);
+        
+        var pad_start = "snd";
+        var pad_end = "end";
+        var struct = new JSPack();
+        var outbound_bytes = struct.Pack('3s32A32A128A3s', [pad_start, chat_id, user_id, encrypted_bytes, pad_end]);
+        
+        ws_send(outbound_bytes); 
+      };
 
-    function message_to_bytes() {
-      var title = get_title();        // known by peers
-      var password = get_password();  // private
-      var message = get_message();    // known by peers
-      var epoc_time = Date.now();     // known by peers
+      function bytes_to_message(bytes) {
+        //message: Message ID, Time, USER ID, Message cypher, Signature
+        var unpack1 = struct.Unpack('3s32A32A128A3s', bytes, 0);
+        var message_id = unpack1[0];  // load this into a global variable
+        var time = unpack1[1];
+        var user_id = unpack1[2];
+        var encrypted_bytes = unpack1[3];
+        var Signature = unpack1[4];   // veryify this at some point
 
-      var chat_key = sha3_256.array(title);  // known by peers
-      var chat_id = sha3_256.array(chat_key);  // chat key is public
-      var user_id = sha3_256.array(password);  // user id is public
+        // username
+        var username_string = aesjs.utils.hex.fromBytes(user_id);
 
-      message = message.padEnd(128);
-      var text_bytes = aesjs.utils.utf8.toBytes(message);
-      var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, new aesjs.Counter(1));
-      var encrypted_bytes = aes_cnt.encrypt(text_bytes);
+        // date string
+        var epoc = 1; // bytes_to_int(time) todo
+        var date = new Date(epoc); 
+        var date_string = date.toLocaleString('en-GB', { hour12:false } );
+
+        // message text
+        var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, new aesjs.Counter(1));
+        var decrypted_bytes = aes_cnt.decrypt(encrypted_bytes);
+        var message_string = aesjs.utils.utf8.fromBytes(decryptedBytes); 
+        //console.log(message_string);
+
+        build_message(username_string, date_string, message_string)
+      };
       
-      var pad_start = "snd";
-      var pad_end = "end";
-      var struct = new JSPack();
-      var outbound = struct.Pack('3s32A32A128A3s', [pad_start, chat_id, user_id, encrypted_bytes, pad_end]);
-      
-      // message: ["start\n", chat_id, user_id, cypher, "endend"]
-      /*
-        > Chat ID
-        - user id
-        - Message cypher
-        115, 116, 97, 114, 116, 10
-      */
-      // just for printing
-      //var aaa = aesjs.utils.hex.fromBytes(outbound);
-      //console.log(aaa);
+      function build_message(username_string, date_string, message_string) {
+        let message_list_div = document.getElementById('message_list');
+
+        var msg_div = document.createElement('div');
+        var usr_div = document.createElement('div');
+        var time_div = document.createElement('div');
+        var content_div = document.createElement('div');
+
+        msg_div.className = 'message';
+        usr_div.className = 'username';
+        time_div.className = 'time';
+        content_div.className = 'content';
+
+        usr_div.innerHTML = username_string;
+        time_div.innerHTML = date_string;
+        content_div.innerHTML = message_string;
+
+        msg_div.appendChild(usr_div);
+        msg_div.appendChild(time_div);
+        msg_div.appendChild(content_div);
+        message_list_div.appendChild(card_div);
+      };
+      function send_message() {
+        var bytes = message_to_bytes();
+        document.getElementById('message_entry').innerHTML = "";
+      };
     };
-
-    function bytes_to_message(bytes) {
-      var encryption_key = cryptico.generateRSAKey(title, 1024);
-      var message = cryptico.decrypt(bytes, encryption_key);
-      var sender_id = cryptico.publicKeyID(message.publicKeyString);
-
-      var date = new Date(Date.now()); 
-      var date_string = date.toLocaleString('en-GB', { hour12:false } );
-      var username_string = ''
-      var message_string = ''
-
-      let message_list_div = document.getElementById('message_list');
-
-      var msg_div = document.createElement('div');
-      var usr_div = document.createElement('div');
-      var time_div = document.createElement('div');
-      var content_div = document.createElement('div');
-
-      msg_div.className = 'message';
-      usr_div.className = 'username';
-      time_div.className = 'time';
-      content_div.className = 'content';
-
-      usr_div.innerHTML = username_string;
-      time_div.innerHTML = date_string;
-      content_div.innerHTML = message_string;
-
-      msg_div.appendChild(usr_div);
-      msg_div.appendChild(time_div);
-      msg_div.appendChild(content_div);
-      message_list_div.appendChild(card_div);
-    };
-    function send_message() {
-      var bytes = message_to_bytes();
-      document.getElementById('message_entry').innerHTML = "";
-    };
-
-
     window.onload = main;
   </script>
 
