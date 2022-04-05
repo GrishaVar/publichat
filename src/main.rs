@@ -62,7 +62,10 @@ fn main() {
         println!("Fetching bckward {} times: {}μs", COUNT, t4.duration_since(t3).unwrap().as_micros());
     }
 
-    let listener = TcpListener::bind(IP_PORT).unwrap();
+    let listener = TcpListener::bind(IP_PORT).unwrap_or_else(|_| {
+        println!("Failed to bind TCP port. Exiting...");
+        std::process::exit(3);
+    });
 
     for stream in listener.incoming() {
         let data_dir = data_dir.clone();
