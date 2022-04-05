@@ -5,6 +5,7 @@ mod msg;
 mod constants;
 mod http;
 mod smrt;
+mod ws;
 use constants::*;
 
 
@@ -16,8 +17,8 @@ fn handle_incoming(mut stream: std::net::TcpStream, data_dir: Arc<Path>) {
     stream.read(&mut pad_buf).expect("failed to read first 3 bytes!");
 
     match &pad_buf {
-        b"GET " => http::handle(&mut stream, &data_dir),
-        b"SMRT" => smrt::handle(&mut stream, &data_dir),
+        b"GET " => http::handle(stream, &data_dir),
+        b"SMRT" => smrt::handle(stream, &data_dir),
         _ => return,
     }
 }

@@ -1,6 +1,7 @@
-use std::{net::TcpStream, sync::Arc, path::Path, io::{Read, Write}, fs::{self, File}};
+use std::{net::TcpStream, sync::Arc, path::Path, fs, io::{Read, Write}};
 use sha1_smol::Sha1;
 use crate::smrt;
+use crate::ws::WsStream;
 
 fn handle_file(file: &str, stream: &mut TcpStream) {
     // BE CAREFUL WITH THIS ONE!
@@ -18,17 +19,22 @@ fn handle_file(file: &str, stream: &mut TcpStream) {
     stream.write(&[header_string.as_bytes(), &body].concat()).unwrap();
 }
 
-fn handle_ws(req: &String, stream: &mut TcpStream, data_dir: &Arc<Path>) {
+fn handle_ws(req: &String, mut stream: TcpStream, data_dir: &Arc<Path>) {
     println!("handling ws");
     // handshake
     let key_in = match req.split("Sec-WebSocket-Key: ").nth(1) {
         Some(val) => &val[..24],
-        _ => {handle_code(stream, 400); return},
+        _ => {handle_code(&mut stream, 400); return},
     };
     let mut hasher = Sha1::new();
     hasher.update(key_in.as_bytes());
     hasher.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
     let key_out = base64::encode(hasher.digest().bytes());
+
+    let mut buff = [0; 1024];  // clear all data
+    stream.read(&mut buff).ok();
+        // todo: think of a way to do it without allocating
+        // maybe check the Content-Length header
 
     stream.write(
         format!(
@@ -40,10 +46,11 @@ fn handle_ws(req: &String, stream: &mut TcpStream, data_dir: &Arc<Path>) {
         ).as_bytes()
     ).unwrap();
     stream.flush().unwrap();
+    println!("Finished handshake; moving on to smrt");
 
     // launch SMRT
-    // todo: does NOT handle ws en/decoding
-    smrt::handle(stream, data_dir);
+    let mut stream = WsStream::new(stream);
+    smrt::handle(&mut stream, data_dir);
 }
 
 fn handle_code(stream: &mut TcpStream, code: u16) {
@@ -59,7 +66,7 @@ fn handle_robots(stream: &mut TcpStream) {
     ).unwrap();
 }
 
-pub fn handle(stream: &mut TcpStream, data_dir: &Arc<Path>) {
+pub fn handle(mut stream: TcpStream, data_dir: &Arc<Path>) {
     // Handles GET requests (where first four bytes "GET " already consumed)
     let mut buf = [0; 512];
     stream.read(&mut buf).unwrap();
@@ -72,12 +79,12 @@ pub fn handle(stream: &mut TcpStream, data_dir: &Arc<Path>) {
     println!("Recieved path: {}", path);
 
     match path {
-        "/" | ""        => handle_file("page/index.html", stream),
-        "/favicon.ico"  => handle_file("page/favicon.ico", stream),
-        "/jspack.js"    => handle_file("page/jspack.js", stream),  // todo: remove
+        "/" | ""        => handle_file("page/index.html", &mut stream),
+        "/favicon.ico"  => handle_file("page/favicon.ico", &mut stream),
+        "/jspack.js"    => handle_file("page/jspack.js", &mut stream),  // todo: remove
         "/ws"           => {handle_ws(&req, stream, data_dir); return},  // start WS
-        "/robots.txt"   => handle_robots(stream),
-        _               => handle_code(stream, 404),  // reject everything else
+        "/robots.txt"   => handle_robots(&mut stream),
+        _               => handle_code(&mut stream, 404),  // reject everything else
     };
     stream.flush().unwrap();
 }

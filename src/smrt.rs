@@ -1,4 +1,4 @@
-use std::{sync::Arc, net::TcpStream, io::Read, path::Path};
+use std::{sync::Arc, io::{Read, Write}, path::Path};
 
 use crate::{constants::*, db, msg};
 
@@ -14,14 +14,14 @@ fn get_chat_file(chat_id: &Hash, data_dir: &Path) -> std::path::PathBuf {
     data_dir.join(base64::encode(chat_id))
 }
 
-fn send_messages(stream: &mut TcpStream, msgs: &Vec<MessageSt>) {
+fn send_messages(stream: &mut (impl Read + Write), msgs: &Vec<MessageSt>) {
     // converts MessageSt to MessageOut and sends each into stream
     // msg::storage_to_packet
     // TcpStream::write
     todo!()
 }
 
-pub fn handle(stream: &mut TcpStream, data_dir: &Arc<Path>) {
+pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) {
     let mut pad_buf = [0; PADDING_SIZE];
     let mut snd_buf = [0; MSG_IN_SIZE];  // size of msg packet
     let mut chat_id_buf = [0; CHAT_ID_SIZE];
@@ -71,7 +71,7 @@ pub fn handle(stream: &mut TcpStream, data_dir: &Arc<Path>) {
                 let messages = db::query(&path, id, count, forward);
 
                 // TODO send messages back to the client with a function
-                send_messages(stream, &messages.unwrap())
+                send_messages(&mut stream, &messages.unwrap())
             },
             _ => println!("{:?}", pad_buf.map(char::from)),  // invalid padding  todo: respond with error
         }
