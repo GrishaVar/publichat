@@ -9,24 +9,96 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/aes-js/4.0.0-beta.2/index.min.js" integrity="sha512-H9KqUQpRsqGUaA2pm2FkHZX4wFhgDwE70o2PUS0Cx7V1PJjBh2J5YZnSaI/u0m9zv/Cx3qvMI48/OZz7/o47xQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script type="text/javascript">
     main = function() {
-      document.getElementById('circle').onclick = function() {message_to_bytes()};
-      var ip_port = location.host.split(":")[0] + ":7878";
-      var ip_port_format = 'ws://' + ip_port + /ws/;
-      const socket = new WebSocket(ip_port_format);
+      document.getElementById('send_button').onclick = function() {message_to_bytes()};
+      document.getElementById('join_button').onclick = function() {
+        document.getElementById('join_button').remove();
+        draw_on();
+        mainloop("")
+      };
+
+      var ws_ip_port = 'ws://' + location.host + "/ws";
+      const socket = new WebSocket(ws_ip_port);
       socket.onopen = function() {console.log("socket opened");};
       socket.onerror = function(e) {console.log('ws error!'+e.code+e.reason);};
       socket.onclose = function(e) {console.log('ws closed!'+e.code+e.reason);};
       socket.onmessage = function(e) {console.log("recieved:\n" + e.data);};
       function ws_send(bytes) {
         socket.send(bytes);
-              // For printing and debugging
+        // For printing and debugging
         var outbound_hex = aesjs.utils.hex.fromBytes(bytes);
-        console.log("Sent: " + outbound_hex);
+        console.log("Sent: " + bytes);
       }
+
+      var struct = new JSPack();
+      var max_chat_id = 0;
+      var min_chat_id = Number.MAX_SAFE_INTEGER;
 
       function get_title(){return document.getElementById('title').value;}
       function get_password(){return document.getElementById('password').value;}
       function get_message(){return document.getElementById('message_entry').value;}
+      function clear_messages(){document.getElementById('message_list').replaceChildren();}
+
+      function draw_on() {
+        var title_div = document.getElementById('title_div');
+        var stop_button = document.createElement("div");
+        var stop_square = document.createElement("div");
+        stop_button.onclick = function() {
+          document.getElementById('title').value = "";
+          setTimeout(function() {document.getElementById('stop_button').remove();}, 1000);
+        };
+        stop_button.id="stop_button";
+        stop_square.id = "stop_square";
+        stop_button.appendChild(stop_square);
+        title_div.appendChild(stop_button);
+      };
+      function draw_off() {
+        var title_div = document.getElementById('title_div');
+        var join_button = document.createElement("div");
+        var join_triangle_top = document.createElement("div");
+        var join_triangle_bot = document.createElement("div");
+        join_button.onclick = function() {
+          document.getElementById('join_button').remove();
+          draw_on();
+          mainloop("")
+        };
+        join_button.id="join_button";
+        join_triangle_bot.id = "join_triangle_bot";
+        join_triangle_top.id = "join_triangle_top";  
+        join_button.appendChild(join_triangle_top);
+        join_button.appendChild(join_triangle_bot);
+        title_div.appendChild(join_button);
+      };
+
+      function mainloop(old_title) {
+        var title = get_title();
+        if (title == "") {  // make new button to start the mainloop again
+          draw_off();
+          return;
+        }
+        // check if chat title has changed
+        if (title ==  old_title) {
+          // update chat list to new title
+          clear_messages();
+          max_chat_id = 0;
+          min_chat_id = Number.MAX_SAFE_INTEGER;
+          fetch_messages(title);
+        } else {
+          query_messages(title, max_chat_id);
+        }
+        setTimeout(function() {mainloop(title);}, 500);
+      };
+
+      function fetch_messages(title) {
+        var chat_id = sha3_256.array(title);
+        var outbound_bytes = struct.Pack('3s32A3s', ["fch", chat_id, "end"]);
+        ws_send(outbound_bytes);
+      };
+      function query_messages(title, message_id) {
+        var chat_id = sha3_256.array(title);
+        var query = 0xff_00_00_00 + max_chat_id;
+        var outbound_bytes = struct.Pack('3sA32I3s', ["qry", chat_id, query, "end"]);
+        ws_send(outbound_bytes);
+      };
 
       function message_to_bytes() {      
         // message: ["snd", chat_id, user_id, cypher, "end"]
@@ -199,7 +271,7 @@
       font-family: verdana;
     }
 
-    #circle {
+    #send_button {
       float: right;
       position: absolute;
       z-index: 100;
@@ -210,7 +282,7 @@
       height: 45px;
       padding: 16px;
 
-      border-radius: 50%;
+      border-radius: 45%;
 
       background: #6a197d;
     }
@@ -232,112 +304,93 @@
       border-top: 25px solid white;
       border-right: 55px solid transparent;
     }
+    #join_button {
+      float: right;
+      position: absolute;
+      z-index: 100;
+      top: 4px;
+      right: 4px;
+
+      width: 33px;
+      height: 33px;
+      padding: 6px;
+
+      border-radius: 40%;
+      background: #6a197d;
+    }
+    #join_triangle_top {
+      position: absolute;
+      /* position */
+      top: 9px;
+      left: 12px;
+      /* size */
+      border-bottom: 13px solid white;
+      border-right: 25px solid transparent;
+    }
+    #join_triangle_bot {
+      position: absolute;
+      /* position */
+      top: 22px;
+      left: 12px;
+      /* size */
+      border-top: 13px solid white;
+      border-right: 25px solid transparent;
+    }
+
+    #stop_button {
+      float: right;
+      position: absolute;
+      z-index: 100;
+      top: 4px;
+      right: 4px;
+
+      width: 33px;
+      height: 33px;
+      padding: 6px;
+
+      border-radius: 40%;
+      background: #6a197d;
+    }
+    #stop_square {
+      position: absolute;
+      /* position */
+      top: 12px;
+      left: 12px;
+      /* size */
+      border-top: 21px solid white;
+      border-right: 21px solid white;
+    }
+
   </style>
     <title>Publichat</title>
   </head>
 
   <body height="100%" width=100% class="everything">
+    <div id="title_div">
       <input type="text" class="title" id="title" placeholder="Title" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-
-      <div class="message_list" id="message_list">
-        <div class="message">
-          <div class="username">WZRHGrsBESr8wYFZ</div>
-          <div class="time">22:25 - 11 March 2020</div>
-          <div class="content">Beethoven remains one of the most admired composers in the history of Western music</div>
-        </div>
-
-        <div class="message2">
-          <div class="username">f4c51bccdbdd2781</div>
-          <div class="time">22:25 - 11 March 2022</div>
-          <div class="content">His works rank amongst the most performed of the classical music repertoire and span the transition from the Classical period to the Romantic era in classical music.</div>
-        </div>
-
-        <div class="message">
-          <div class="username">1f4c51bcdd278cdb</div>
-          <div class="time">22:36 - 11 March 2022</div>
-          <div class="content">Beethoven was born in Bonn. His musical talent was obvious at an early age.</div>
-        </div>
-        <div class="message2">
-          <div class="username">dd2781f4c51bccdb</div>
-          <div class="time">22:25 - 11 March 2020</div>
-          <div class="content">Beethoven remains one of the most admired composers in the history of Western music</div>
-        </div>
-
-        <div class="message">
-          <div class="username">f4c51bccdbdd2781</div>
-          <div class="time">22:25 - 11 March 2022</div>
-          <div class="content">His works rank amongst the most performed of the classical music repertoire and span the transition from the Classical period to the Romantic era in classical music.</div>
-        </div>
-
-        <div class="message2">
-          <div class="username">1f4c51bcdd278cdb</div>
-          <div class="time">22:36 - 11 March 2022</div>
-          <div class="content">Beethoven was born in Bonn. His musical talent was obvious at an early age.</div>
-        </div>
-        <div class="message">
-          <div class="username">dd2781f4c51bccdb</div>
-          <div class="time">22:25 - 11 March 2020</div>
-          <div class="content">Beethoven remains one of the most admired composers in the history of Western music</div>
-        </div>
-
-        <div class="message2">
-          <div class="username">f4c51bccdbdd2781</div>
-          <div class="time">22:25 - 11 March 2022</div>
-          <div class="content">His works rank amongst the most performed of the classical music repertoire and span the transition from the Classical period to the Romantic era in classical music.</div>
-        </div>
-
-        <div class="message">
-          <div class="username">1f4c51bcdd278cdb</div>
-          <div class="time">22:36 - 11 March 2022</div>
-          <div class="content">Beethoven was born in Bonn. His musical talent was obvious at an early age.</div>
-        </div>
-        <div class="message2">
-          <div class="username">dd2781f4c51bccdb</div>
-          <div class="time">22:25 - 11 March 2020</div>
-          <div class="content">Beethoven remains one of the most admired composers in the history of Western music</div>
-        </div>
-
-        <div class="message">
-          <div class="username">f4c51bccdbdd2781</div>
-          <div class="time">22:25 - 11 March 2022</div>
-          <div class="content">His works rank amongst the most performed of the classical music repertoire and span the transition from the Classical period to the Romantic era in classical music.</div>
-        </div>
-
-        <div class="message2">
-          <div class="username">1f4c51bcdd278cdb</div>
-          <div class="time">22:36 - 11 March 2022</div>
-          <div class="content">Beethoven was born in Bonn. His musical talent was obvious at an early age.</div>
-        </div>
-        <div class="message">
-          <div class="username">dd2781f4c51bccdb</div>
-          <div class="time">22:25 - 11 March 2020</div>
-          <div class="content">Beethoven remains one of the most admired composers in the history of Western music</div>
-        </div>
-
-        <div class="message2">
-          <div class="username">f4c51bccdbdd2781</div>
-          <div class="time">22:25 - 11 March 2022</div>
-          <div class="content">His works rank amongst the most performed of the classical music repertoire and span the transition from the Classical period to the Romantic era in classical music.</div>
-        </div>
-
-        <div class="message">
-          <div class="username">1f4c51bcdd278cdb</div>
-          <div class="time">22:36 - 11 March 2022</div>
-          <div class="content">Beethoven was born in Bonn. His musical talent was obvious at an early age.</div>
-        </div>
+      <div id="join_button">
+        <div id="join_triangle_top"></div>
+        <div id="join_triangle_bot"></div>
       </div>
-
-      <div class="bottom">
-        <div class="inputs">
-          <input type="text" class="password" id="password" placeholder="Secret Identifier" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-          <input type="text" class="message_entry" id="message_entry" placeholder="Write message here..." >
-        </div>
-        <div id="circle">
-            <div id="triangle_top"></div>
-            <div id="triangle_bot"></div>
-          </div>
+    </div>
+    
+    <div class="message_list" id="message_list">
+      <div class="message">
+        <div class="username">WZRHGrsBESr8wYFZ</div>
+        <div class="time">22:25 - 11 March 2020</div>
+        <div class="content">Beethoven remains one of the most admired composers in the history of Western music</div>
       </div>
+    </div>
+
+    <div class="bottom">
+      <div class="inputs">
+        <input type="text" class="password" id="password" placeholder="Secret Identifier" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <input type="text" class="message_entry" id="message_entry" placeholder="Write message here..." >
+      </div>
+      <div id="send_button">
+        <div id="triangle_top"></div>
+        <div id="triangle_bot"></div>
+      </div>
+    </div>
   </body>
-
-<!-- <img src="send_icon.png" alt="Send" class="send_button"> -->
 </html>
