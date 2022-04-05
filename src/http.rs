@@ -1,19 +1,21 @@
-use std::{net::TcpStream, sync::Arc, path::Path, io::{Read, Write}, fs};
+use std::{net::TcpStream, sync::Arc, path::Path, io::{Read, Write}, fs::{self, File}};
 use sha1_smol::Sha1;
 use crate::smrt;
 
 fn handle_file(file: &str, stream: &mut TcpStream) {
     // BE CAREFUL WITH THIS ONE!
-    println!("handling file");
-    let file = match fs::read_to_string(file) {
+    println!("handling file: {}", file);
+    let body = match fs::read(file) {
         Ok(f) => f,
         _ => {handle_code(stream, 404); return;},
     };
-    stream.write(format!(
-        "HTTP/1.1 200\r\nContent-Length: {}\r\n\r\n{}",
-        file.len(),
-        file,
-    ).as_bytes()).unwrap();
+    
+    let header_string = format!(
+        "HTTP/1.1 200\r\nContent-Length: {}\r\n\r\n",
+        body.len()
+    );
+
+    stream.write(&[header_string.as_bytes(), &body].concat()).unwrap();
 }
 
 fn handle_ws(req: &String, stream: &mut TcpStream, data_dir: &Arc<Path>) {
