@@ -74,8 +74,9 @@ pub fn handle(stream: &mut TcpStream, data_dir: &Arc<Path>) {
 
     match path {
         "/" | ""        => handle_file("page/index.html", stream),
+        "/favicon.ico"  => handle_file("page/favicon.ico", stream),
         "/jspack.js"    => handle_file("page/jspack.js", stream),  // todo: remove
-        "/ws"           => handle_ws(&req, stream, data_dir),  // start WS
+        "/ws/"          => handle_ws(&req, stream, data_dir),  // start WS
         "/robots.txt"   => handle_robots(stream),
         _               => handle_code(stream, 404),  // reject everything else
     };
