@@ -22,7 +22,7 @@ pub fn fetch(path: &PathBuf, count: u8) -> std::io::Result<Vec<MessageSt>> {
         _ => return Ok(Vec::new()),  // no file => no contents
     };
 
-    if let Err(_) = file.seek(SeekFrom::End(-(count as i64))) {
+    if let Err(_) = file.seek(SeekFrom::End(count as i64 * -(MSG_ST_SIZE as i64))) {
         file.seek(SeekFrom::Start(0))?;
     }
 
