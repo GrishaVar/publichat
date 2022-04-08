@@ -11,10 +11,8 @@ fn query_bytes_to_args(data: &[u8; 4]) -> (u32, u8, bool) {
 
 fn get_chat_file(chat_id: &Hash, data_dir: &Path) -> std::path::PathBuf {
     // encode hash into b64 and append to data_dir
-    data_dir.join(base64::encode_config(
-        chat_id,
-        base64::Config::new(base64::CharacterSet::UrlSafe, false),
-    ))
+    use base64::{Config, CharacterSet::UrlSafe};
+    data_dir.join(base64::encode_config(chat_id, Config::new(UrlSafe, false)))
 }
 
 fn send_messages(stream: &mut (impl Read + Write), msgs: &Vec<MessageSt>) {
@@ -22,14 +20,24 @@ fn send_messages(stream: &mut (impl Read + Write), msgs: &Vec<MessageSt>) {
     // msg::storage_to_packet
     // TcpStream::write
     let mut buffer = [0; MAX_FETCH_AMOUNT as usize*MSG_OUT_SIZE];
+    for msg_id in 0..msgs.len() as u32 {
+        let index: usize = MSG_OUT_SIZE * msg_id as usize;
+        msg::storage_to_packet(
+            &msgs[msg_id as usize],
+            &mut buffer[index..][..MSG_OUT_SIZE],
+            msg_id,
+        );
+    }
+    stream.write(&buffer[..msgs.len()*MSG_OUT_SIZE]).expect("failed to write buffer to steam.");
 
+    /* 
+    // this was the old implementation it will be deleted at some point
     for msg_id in 0..msgs.len() as u32 {
         let mut index: usize= MSG_OUT_SIZE * msg_id as usize;
         buffer[index..index+MSG_ID_SIZE].clone_from_slice(&msg_id.to_be_bytes());
         index += MSG_ID_SIZE;
         buffer[index..index+MSG_ST_SIZE].clone_from_slice(&msgs[msg_id as usize]);
-    }
-    stream.write(&buffer[..msgs.len()*MSG_OUT_SIZE]).expect("failed to write buffer to steam.");
+    }*/
 }
 
 pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) {
