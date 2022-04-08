@@ -21,12 +21,13 @@ fn send_messages(stream: &mut (impl Read + Write), msgs: &Vec<MessageSt>) {
     // converts MessageSt to MessageOut and sends each into stream
     // msg::storage_to_packet
     // TcpStream::write
-    let mut buffer = [0; 128*MSG_OUT_SIZE];
+    let mut buffer = [0; MAX_FETCH_AMOUNT as usize*MSG_OUT_SIZE];
 
-    for msg_id in 0..msgs.len() {
-        let index= MSG_OUT_SIZE*msg_id;
+    for msg_id in 0..msgs.len() as u32 {
+        let mut index: usize= MSG_OUT_SIZE * msg_id as usize;
         buffer[index..index+MSG_ID_SIZE].clone_from_slice(&msg_id.to_be_bytes());
-        buffer[index+MSG_ID_SIZE..index+MSG_ST_SIZE].clone_from_slice(&msgs[msg_id]);
+        index += MSG_ID_SIZE;
+        buffer[index..index+MSG_ST_SIZE].clone_from_slice(&msgs[msg_id as usize]);
     }
     stream.write(&buffer[..msgs.len()*MSG_OUT_SIZE]).expect("failed to write buffer to steam.");
 }
@@ -60,9 +61,9 @@ pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) {
                 // get arguments for the db fetch
                 let path = get_chat_file(&chat_id_buf, data_dir);
 
-                let messages = db::fetch(&path, DEFAULT_FETCH_AMOUNT);
+                let messages = db::fetch(&path, DEFAULT_FETCH_AMOUNT).unwrap();
 
-                // TODO send messages back to the client with a function
+                send_messages(&mut stream, &messages);
             },
             QUERY_PADDING => {
                 // fill chat_id and arg buffer
@@ -74,18 +75,15 @@ pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) {
                 if pad_buf != END_PADDING { todo!() }  // verify end padding
                 
                 // get arguments for the db fetch
-                let (id, count, forward) = query_bytes_to_args(&qry_arg_buf);
+                let (msg_id, count, forward) = query_bytes_to_args(&qry_arg_buf);
                 let path = get_chat_file(&chat_id_buf, data_dir);
-                
-                // return query
-                let messages = db::query(&path, id, count, forward);
 
-                // TODO send messages back to the client with a function
-                send_messages(&mut stream, &messages.unwrap())
+                // return query
+                let messages = db::query(&path, msg_id, count, forward).unwrap();
+                send_messages(&mut stream, &messages);
             },
             _ => {
-                //println!("{:?}", pad_buf.map(char::from));  // invalid padding  todo: respond with error
-                println!("{:?}", pad_buf);  // invalid padding  todo: respond with error
+                println!("{:?}", pad_buf);  // invalid padding could be http, TODO
                 break;
             }
         }
