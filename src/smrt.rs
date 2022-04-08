@@ -18,7 +18,14 @@ fn send_messages(stream: &mut (impl Read + Write), msgs: &Vec<MessageSt>) {
     // converts MessageSt to MessageOut and sends each into stream
     // msg::storage_to_packet
     // TcpStream::write
-    todo!()
+    let mut buffer = [0; 128*MSG_OUT_SIZE];
+
+    for msg_id in 0..msgs.len() {
+        let index= MSG_OUT_SIZE*msg_id;
+        buffer[index..index+MSG_ID_SIZE].clone_from_slice(&msg_id.to_be_bytes());
+        buffer[index+MSG_ID_SIZE..index+MSG_ST_SIZE].clone_from_slice(&msgs[msg_id]);
+    }
+    stream.write(&buffer[..msgs.len()*MSG_OUT_SIZE]).expect("failed to write buffer to steam.");
 }
 
 pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) {
@@ -29,7 +36,7 @@ pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) {
 
     let mut st_buf = [0; MSG_ST_SIZE];
     loop {
-        stream.read_exact(&mut pad_buf).expect("failed to smrt padding!");
+        stream.read_exact(&mut pad_buf).expect("failed to read smrt padding!");
         
         match pad_buf {
             SEND_PADDING => {
@@ -38,7 +45,7 @@ pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) {
                 if pad_buf != END_PADDING { todo!() }  // verify end padding
  
                 chat_id_buf = msg::packet_to_storage(&snd_buf, &mut st_buf);
-                db::push(&get_chat_file(&chat_id_buf, data_dir), &st_buf);
+                db::push(&get_chat_file(&chat_id_buf, data_dir), &st_buf).expect("Failed to push to DB.");
             },
             FETCH_PADDING => {
                 // fill fetch buffer
@@ -73,7 +80,11 @@ pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) {
                 // TODO send messages back to the client with a function
                 send_messages(&mut stream, &messages.unwrap())
             },
-            _ => println!("{:?}", pad_buf.map(char::from)),  // invalid padding  todo: respond with error
+            _ => {
+                //println!("{:?}", pad_buf.map(char::from));  // invalid padding  todo: respond with error
+                println!("{:?}", pad_buf);  // invalid padding  todo: respond with error
+                break;
+            }
         }
     }
 }
