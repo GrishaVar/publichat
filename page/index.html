@@ -15,20 +15,54 @@
         draw_on();
         mainloop("")
       };
-
       var ws_ip_port = 'ws://' + location.host + "/ws";
       const socket = new WebSocket(ws_ip_port);
       socket.onopen = function() {console.log("socket opened");};
       socket.onerror = function(e) {console.log('ws error!'+e.code+e.reason);};
       socket.onclose = function(e) {console.log('ws closed!'+e.code+e.reason);};
-      socket.onmessage = function(e) {console.log("recieved:\n" + e.data);};
+      socket.onmessage = function(e) {ws_receive(e)};
       function ws_send(bytes) {
-        socket.send(bytes);
+        if (socket.readyState != WebSocket.OPEN) {
+          console.log('Tried sending to closed WS');
+          return;
+        }
+
+        var outgoing = new Uint8Array(bytes);
+        socket.send(outgoing);
         // For printing and debugging
-        var outbound_hex = aesjs.utils.hex.fromBytes(bytes);
-        console.log("Sent: " + bytes);
+        //var outbound_hex = aesjs.utils.hex.fromBytes(bytes);
+        //console.log("Sent:\n " + outbound_hex);
+        /*console.log("Sent: ");
+        console.log(outgoing);*/
+      };
+      function ws_receive(message_event) {
+        var blob = message_event.data;
+        reader.readAsArrayBuffer(blob);
       }
 
+      function read_message_bytes(bytes) {
+        if (bytes == null || bytes == []) {
+          console.log('recevied empty');
+          return;
+        }
+        var message_byte_size = 180;
+        while(bytes.length > 0) {
+          var single_message = bytes.splice(0, message_byte_size);
+          bytes_to_message(single_message);
+          bytes = bytes.splice(message_byte_size, bytes.length);
+        }
+      };
+
+      var reader = new FileReader();
+      reader.onload = function() {
+        var result = reader.result;
+        var bytes_u8_array = new Uint8Array(result);
+        var bytes = Array.from(bytes_u8_array);
+        read_message_bytes(bytes);
+        // For printing and debugging
+        /*console.log('received:');*/
+        //console.log(reader.result);
+      }
       var struct = new JSPack();
       var max_chat_id = 0;
       var min_chat_id = Number.MAX_SAFE_INTEGER;
@@ -43,10 +77,10 @@
         var stop_button = document.createElement("div");
         var stop_square = document.createElement("div");
         stop_button.onclick = function() {
-          document.getElementById('title').value = "";
+          //document.getElementById('title').value = "";
           setTimeout(function() {document.getElementById('stop_button').remove();}, 1000);
         };
-        stop_button.id="stop_button";
+        stop_button.id = "stop_button";
         stop_square.id = "stop_square";
         stop_button.appendChild(stop_square);
         title_div.appendChild(stop_button);
@@ -76,7 +110,7 @@
           return;
         }
         // check if chat title has changed
-        if (title ==  old_title) {
+        if (title == old_title) {
           // update chat list to new title
           clear_messages();
           max_chat_id = 0;
@@ -89,14 +123,16 @@
       };
 
       function fetch_messages(title) {
-        var chat_id = sha3_256.array(title);
+        var chat_key = sha3_256.array(title);
+        var chat_id = sha3_256.array(chat_key);
         var outbound_bytes = struct.Pack('3s32A3s', ["fch", chat_id, "end"]);
         ws_send(outbound_bytes);
       };
       function query_messages(title, message_id) {
-        var chat_id = sha3_256.array(title);
+        var chat_key = sha3_256.array(title);
+        var chat_id = sha3_256.array(chat_key);
         var query = 0xff_00_00_00 + max_chat_id;
-        var outbound_bytes = struct.Pack('3sA32I3s', ["qry", chat_id, query, "end"]);
+        var outbound_bytes = struct.Pack('3s32AI3s', ["qry", chat_id, query, "end"]);
         ws_send(outbound_bytes);
       };
 
@@ -126,25 +162,28 @@
 
       function bytes_to_message(bytes) {
         //message: Message ID, Time, USER ID, Message cypher, Signature
-        var unpack1 = struct.Unpack('3s32A32A128A3s', bytes, 0);
-        var message_id = unpack1[0];  // load this into a global variable
-        var time = unpack1[1];
-        var user_id = unpack1[2];
-        var encrypted_bytes = unpack1[3];
-        var Signature = unpack1[4];   // veryify this at some point
+        var unpack = struct.Unpack('I16A32A128A', bytes, 0);
+        var message_id = unpack[0];  // load this into a global variable
+        max_chat_id = Math.max(max_chat_id, message_id);
+        var time = unpack[1];
+        var user_id = unpack[2];
+        var encrypted_bytes = unpack[3];
+        //var Signature = unpack[4];   // veryify this at some point
 
         // username
         var username_string = aesjs.utils.hex.fromBytes(user_id);
 
         // date string
-        var epoc = 1; // bytes_to_int(time) todo
+        var epoc = time[0] << 20; // bytes_to_int(time) todo
         var date = new Date(epoc); 
         var date_string = date.toLocaleString('en-GB', { hour12:false } );
 
         // message text
+        var title = get_title();
+        var chat_key = sha3_256.array(title);
         var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, new aesjs.Counter(1));
         var decrypted_bytes = aes_cnt.decrypt(encrypted_bytes);
-        var message_string = aesjs.utils.utf8.fromBytes(decryptedBytes); 
+        var message_string = aesjs.utils.utf8.fromBytes(decrypted_bytes); 
         //console.log(message_string);
 
         build_message(username_string, date_string, message_string)
@@ -170,7 +209,7 @@
         msg_div.appendChild(usr_div);
         msg_div.appendChild(time_div);
         msg_div.appendChild(content_div);
-        message_list_div.appendChild(card_div);
+        message_list_div.appendChild(msg_div);
       };
       function send_message() {
         var bytes = message_to_bytes();
