@@ -5,8 +5,6 @@ use std::fs::OpenOptions;
 use crate::MessageSt;
 use crate::constants::*;
 
-const FETCH_SIZE: u8 = 50;
-
 pub fn push(path: &PathBuf, msg: &[u8; MSG_ST_SIZE]) -> std::io::Result<()> {
     let mut file = OpenOptions::new()
         .append(true)  // no reading or writing, only append
@@ -41,12 +39,12 @@ pub fn fetch(path: &PathBuf, count: u8) -> std::io::Result<Vec<MessageSt>> {
 pub fn query(
     path: &PathBuf,
     id: u32,  // from which message
-    count: u8,  // how many messages
+    mut count: u8,  // how many messages
     forward: bool,  // search forward or backward in time
 ) -> std::io::Result<Vec<MessageSt>> {
     if count == 0 {return Ok(Vec::new())}  // nothing to return
     if !forward && id == 0 {return Ok(Vec::new())}  // nothing behind 0
-    if count > FETCH_SIZE {return Ok(Vec::new())}  // request too many, return nothing
+    if count > MAX_FETCH_AMOUNT {count = MAX_FETCH_AMOUNT}  // request too many, return max amount
 
     let mut file = match OpenOptions::new().read(true).open(path) {
         Ok(file) => file,
