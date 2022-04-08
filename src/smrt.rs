@@ -11,7 +11,10 @@ fn query_bytes_to_args(data: &[u8; 4]) -> (u32, u8, bool) {
 
 fn get_chat_file(chat_id: &Hash, data_dir: &Path) -> std::path::PathBuf {
     // encode hash into b64 and append to data_dir
-    data_dir.join(base64::encode(chat_id))
+    data_dir.join(base64::encode_config(
+        chat_id,
+        base64::Config::new(base64::CharacterSet::UrlSafe, false),
+    ))
 }
 
 fn send_messages(stream: &mut (impl Read + Write), msgs: &Vec<MessageSt>) {
