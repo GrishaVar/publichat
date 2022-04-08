@@ -9,7 +9,8 @@ pub const CYPHER_SIZE: usize = 128;
 pub const QUERY_ARG_SIZE: usize = std::mem::size_of::<u32>();
 pub const TIME_SIZE: usize = std::mem::size_of::<u128>();
 pub const MSG_ID_SIZE: usize = std::mem::size_of::<u32>();
- 
+
+pub const MAX_FETCH_AMOUNT: u8 = 50;
 pub const DEFAULT_FETCH_AMOUNT: u8 = 50;
 
 pub type Hash       = [u8; HASH_SIZE];
@@ -40,7 +41,7 @@ pub const MSG_OUT_TIME: usize           = MSG_OUT_ID + MSG_ID_SIZE;
 pub const MSG_OUT_RSA: usize            = MSG_OUT_TIME + TIME_SIZE;
 pub const MSG_OUT_CYPHER: usize         = MSG_OUT_RSA + RSA_SIZE;
 pub const MSG_OUT_SIG: usize            = MSG_OUT_CYPHER + CYPHER_SIZE;
-pub const MSG_OUT_SIZE: usize           = MSG_OUT_SIG + HASH_SIZE;
+pub const MSG_OUT_SIZE: usize           = MSG_OUT_SIG + SIG_SIZE;
 
 /*
 Get message from client:
