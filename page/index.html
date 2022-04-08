@@ -11,9 +11,8 @@
     main = function() {
       document.getElementById('send_button').onclick = function() {message_to_bytes()};
       document.getElementById('join_button').onclick = function() {
-        document.getElementById('join_button').remove();
-        draw_on();
-        mainloop("")
+        toggle_loop();
+        mainloop("");
       };
       var ws_ip_port = 'ws://' + location.host + "/ws";
       const socket = new WebSocket(ws_ip_port);
@@ -26,7 +25,6 @@
           console.log('Tried sending to closed WS');
           return;
         }
-
         var outgoing = new Uint8Array(bytes);
         socket.send(outgoing);
         // For printing and debugging
@@ -66,6 +64,7 @@
       var struct = new JSPack();
       var max_chat_id = 0;
       var min_chat_id = Number.MAX_SAFE_INTEGER;
+      
 
       function get_title(){return document.getElementById('title').value;}
       function get_password(){return document.getElementById('password').value;}
@@ -76,10 +75,7 @@
         var title_div = document.getElementById('title_div');
         var stop_button = document.createElement("div");
         var stop_square = document.createElement("div");
-        stop_button.onclick = function() {
-          //document.getElementById('title').value = "";
-          setTimeout(function() {document.getElementById('stop_button').remove();}, 1000);
-        };
+        stop_button.onclick = function() {toggle_loop()};
         stop_button.id = "stop_button";
         stop_square.id = "stop_square";
         stop_button.appendChild(stop_square);
@@ -90,12 +86,8 @@
         var join_button = document.createElement("div");
         var join_triangle_top = document.createElement("div");
         var join_triangle_bot = document.createElement("div");
-        join_button.onclick = function() {
-          document.getElementById('join_button').remove();
-          draw_on();
-          mainloop("")
-        };
-        join_button.id="join_button";
+        join_button.onclick = function() {toggle_loop()};
+        join_button.id = "join_button";
         join_triangle_bot.id = "join_triangle_bot";
         join_triangle_top.id = "join_triangle_top";  
         join_button.appendChild(join_triangle_top);
@@ -103,21 +95,35 @@
         title_div.appendChild(join_button);
       };
 
+      var loop = false;
+      function toggle_loop() {
+        if (loop) {
+          loop = false;
+          document.getElementById('stop_button').remove();
+          draw_off();
+        } else {
+          loop = true;
+          document.getElementById('join_button').remove();
+          draw_on();
+        }
+      }
+
       function mainloop(old_title) {
         var title = get_title();
-        if (title == "") {  // make new button to start the mainloop again
-          draw_off();
+        if (title == "" || loop == false) {
+          setTimeout(function() {mainloop(title);}, 1000);
           return;
         }
         // check if chat title has changed
         if (title == old_title) {
+          console.log(max_chat_id);
+          query_messages(title, max_chat_id);
+        } else {
           // update chat list to new title
           clear_messages();
           max_chat_id = 0;
           min_chat_id = Number.MAX_SAFE_INTEGER;
           fetch_messages(title);
-        } else {
-          query_messages(title, max_chat_id);
         }
         setTimeout(function() {mainloop(title);}, 500);
       };
@@ -165,6 +171,7 @@
         var unpack = struct.Unpack('I16A32A128A', bytes, 0);
         var message_id = unpack[0];  // load this into a global variable
         max_chat_id = Math.max(max_chat_id, message_id);
+        min_chat_id = Math.min(min_chat_id, message_id);
         var time = unpack[1];
         var user_id = unpack[2];
         var encrypted_bytes = unpack[3];
@@ -217,6 +224,7 @@
       };
     };
     window.onload = main;
+    
   </script>
 
   <style>
@@ -348,7 +356,7 @@
       position: absolute;
       z-index: 100;
       top: 4px;
-      right: 4px;
+      right: 10px;
 
       width: 33px;
       height: 33px;
@@ -381,7 +389,7 @@
       position: absolute;
       z-index: 100;
       top: 4px;
-      right: 4px;
+      right: 10px;
 
       width: 33px;
       height: 33px;
@@ -413,11 +421,11 @@
       </div>
     </div>
     
-    <div class="message_list" id="message_list">
+    <div class="message_list" id="message_list" style="overflow-y: scroll;">
       <div class="message">
-        <div class="username">WZRHGrsBESr8wYFZ</div>
+        <div class="username">Admin</div>
         <div class="time">22:25 - 11 March 2020</div>
-        <div class="content">Beethoven remains one of the most admired composers in the history of Western music</div>
+        <div class="content">This is Publichat. Type in a title to being chatting.</div>
       </div>
     </div>
 
