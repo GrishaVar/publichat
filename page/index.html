@@ -43,7 +43,7 @@
           console.log('recevied empty');
           return;
         }
-        var message_byte_size = 180;
+        var message_byte_size = 172;
         while(bytes.length > 0) {
           var single_message = bytes.splice(0, message_byte_size);
           bytes_to_message(single_message);
@@ -147,7 +147,7 @@
         var title = get_title();        // known by peers
         var password = get_password();  // private
         var message = get_message();    // known by peers
-        var epoc_time = Date.now();     // known by peers
+        var epoch_time = Date.now();    // known by peers
 
         var chat_key = sha3_256.array(title);  // known by peers
         var chat_id = sha3_256.array(chat_key);  // chat key is public
@@ -168,7 +168,7 @@
 
       function bytes_to_message(bytes) {
         //message: Message ID, Time, USER ID, Message cypher, Signature
-        var unpack = struct.Unpack('I16A32A128A', bytes, 0);
+        var unpack = struct.Unpack('I8A32A128A', bytes, 0);
         var message_id = unpack[0];  // load this into a global variable
         var time_bytes = unpack[1];
         var user_id = unpack[2];
@@ -181,13 +181,13 @@
         var username_string = aesjs.utils.hex.fromBytes(user_id).slice(0,10);
 
         // date string
-        var time = struct.Unpack('LLLL', time_bytes, 0);
-        var epoc = 0n;
+        var time = struct.Unpack('2L', time_bytes, 0);
+        var epoch = 0n;
         for (var i=0; i < time.length; i++) {
-          epoc += BigInt(time[i]) << BigInt(((time.length-(i+1)) * 32));
+          epoch += BigInt(time[i]) << BigInt(((time.length-(i+1)) * 32));
         }
-        console.log(time, Number(epoc));
-        var date = new Date(Number(epoc));
+        console.log(time, Number(epoch));
+        var date = new Date(Number(epoch));
         var date_string = date.toLocaleString('en-GB', { hour12:false } );
 
         // message text
