@@ -170,19 +170,24 @@
         //message: Message ID, Time, USER ID, Message cypher, Signature
         var unpack = struct.Unpack('I16A32A128A', bytes, 0);
         var message_id = unpack[0];  // load this into a global variable
-        max_chat_id = Math.max(max_chat_id, message_id);
-        min_chat_id = Math.min(min_chat_id, message_id);
-        var time = unpack[1];
+        var time_bytes = unpack[1];
         var user_id = unpack[2];
         var encrypted_bytes = unpack[3];
         //var Signature = unpack[4];   // veryify this at some point
-
+        max_chat_id = Math.max(max_chat_id, message_id);
+        min_chat_id = Math.min(min_chat_id, message_id);
+        
         // username
         var username_string = aesjs.utils.hex.fromBytes(user_id).slice(0,10);
 
         // date string
-        var epoc = time[0] << 20; // bytes_to_int(time) todo
-        var date = new Date(epoc); 
+        var time = struct.Unpack('LLLL', time_bytes, 0);
+        var epoc = 0n;
+        for (var i=0; i < time.length; i++) {
+          epoc += BigInt(time[i]) << BigInt(((time.length-(i+1)) * 32));
+        }
+        console.log(time, Number(epoc));
+        var date = new Date(Number(epoc));
         var date_string = date.toLocaleString('en-GB', { hour12:false } );
 
         // message text

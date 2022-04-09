@@ -8,7 +8,7 @@ pub fn packet_to_storage(src: &MessageIn, dest: &mut MessageSt) -> Hash {
     
     let msg_time = std::time::SystemTime::now()
         .duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap()
-        .as_nanos();
+        .as_millis();
     dest[..TIME_SIZE].clone_from_slice(&u128::to_be_bytes(msg_time));
     dest[MSG_ST_RSA_START..].clone_from_slice(&src[MSG_IN_RSA..]);
 
