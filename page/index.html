@@ -178,7 +178,7 @@
         //var Signature = unpack[4];   // veryify this at some point
 
         // username
-        var username_string = aesjs.utils.hex.fromBytes(user_id);
+        var username_string = aesjs.utils.hex.fromBytes(user_id).slice(0,10);
 
         // date string
         var epoc = time[0] << 20; // bytes_to_int(time) todo
@@ -209,6 +209,7 @@
         time_div.className = 'time';
         content_div.className = 'content';
 
+        usr_div.style.color = "#" + username_string.slice(0,6);
         usr_div.innerHTML = username_string;
         time_div.innerHTML = date_string;
         content_div.innerHTML = message_string;
@@ -353,7 +354,7 @@
     }
     #join_button {
       float: right;
-      position: absolute;
+      position: fixed;
       z-index: 100;
       top: 4px;
       right: 10px;
@@ -386,7 +387,7 @@
 
     #stop_button {
       float: right;
-      position: absolute;
+      position: fixed;
       z-index: 100;
       top: 4px;
       right: 10px;
