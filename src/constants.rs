@@ -7,7 +7,7 @@ pub const CHAT_ID_SIZE: usize = HASH_SIZE;  // HASH_SIZE;
 pub const RSA_SIZE: usize = HASH_SIZE;  // 5;  // todo: what is the correct length?
 pub const CYPHER_SIZE: usize = 128;
 pub const QUERY_ARG_SIZE: usize = std::mem::size_of::<u32>();
-pub const TIME_SIZE: usize = std::mem::size_of::<u128>();
+pub const TIME_SIZE: usize = std::mem::size_of::<u64>();
 pub const MSG_ID_SIZE: usize = std::mem::size_of::<u32>();
 
 pub const MAX_FETCH_AMOUNT: u8 = 50;

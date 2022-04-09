@@ -6,10 +6,10 @@ pub fn packet_to_storage(src: &MessageIn, dest: &mut MessageSt) -> Hash {
     // Write buffer intended for storage into dest.
     // Return chat_id if successful
     
-    let msg_time = std::time::SystemTime::now()
+    let msg_time: u64 = std::time::SystemTime::now()
         .duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap()
-        .as_millis();
-    dest[..TIME_SIZE].clone_from_slice(&u128::to_be_bytes(msg_time));
+        .as_millis().try_into().expect("go play with your hoverboard");
+    dest[..TIME_SIZE].clone_from_slice(&msg_time.to_be_bytes());
     dest[MSG_ST_RSA_START..].clone_from_slice(&src[MSG_IN_RSA..]);
 
     // return the chat ID
