@@ -15,20 +15,23 @@ fn get_chat_file(chat_id: &Hash, data_dir: &Path) -> std::path::PathBuf {
     data_dir.join(base64::encode_config(chat_id, Config::new(UrlSafe, false)))
 }
 
-fn send_messages(stream: &mut (impl Read + Write), msgs: &Vec<MessageSt>) {
+fn send_messages(stream: &mut (impl Read + Write), msgs: &Vec<MessageSt>, first_id: u32) {
     // converts MessageSt to MessageOut and sends each into stream
     // msg::storage_to_packet
     // TcpStream::write
-    let mut buffer = [0; MAX_FETCH_AMOUNT as usize*MSG_OUT_SIZE];
-    for msg_id in 0..msgs.len() as u32 {
-        let index: usize = MSG_OUT_SIZE * msg_id as usize;
+    if msgs.len() == 0 { return }
+
+    let mut buffer = [0; MAX_FETCH_AMOUNT as usize * MSG_OUT_SIZE];
+    for (i, msg) in msgs.iter().enumerate() {
+        let msg_pos: usize = MSG_OUT_SIZE * i as usize;
         msg::storage_to_packet(
-            &msgs[msg_id as usize],
-            &mut buffer[index..][..MSG_OUT_SIZE],
-            msg_id,
-        );
+            msg,
+            &mut buffer[msg_pos..][..MSG_OUT_SIZE],
+            first_id + i as u32,
+        );  // todo: send one msg_id per packet to reduce redundant info
     }
     stream.write(&buffer[..msgs.len()*MSG_OUT_SIZE]).expect("failed to write buffer to steam.");
+    stream.flush().expect("failed to flush");
 
     /* 
     // this was the old implementation it will be deleted at some point
@@ -68,10 +71,11 @@ pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) {
 
                 // get arguments for the db fetch
                 let path = get_chat_file(&chat_id_buf, data_dir);
+                // todo: add count to fetch message
 
-                let messages = db::fetch(&path, DEFAULT_FETCH_AMOUNT).unwrap();
-
-                send_messages(&mut stream, &messages);
+                // fetch from db & send to client
+                let (id, messages) = db::fetch(&path, DEFAULT_FETCH_AMOUNT).unwrap();
+                send_messages(&mut stream, &messages, id);
             },
             QUERY_PADDING => {
                 // fill chat_id and arg buffer
@@ -87,8 +91,8 @@ pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) {
                 let path = get_chat_file(&chat_id_buf, data_dir);
 
                 // return query
-                let messages = db::query(&path, msg_id, count, forward).unwrap();
-                send_messages(&mut stream, &messages);
+                let (id, messages) = db::query(&path, msg_id, count, forward).unwrap();
+                send_messages(&mut stream, &messages, id);
             },
             _ => {
                 println!("{:?}", pad_buf);  // invalid padding could be http, TODO

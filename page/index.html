@@ -43,7 +43,7 @@
           console.log('recevied empty');
           return;
         }
-        var message_byte_size = 180;
+        var message_byte_size = 172;
         while(bytes.length > 0) {
           var single_message = bytes.splice(0, message_byte_size);
           bytes_to_message(single_message);
