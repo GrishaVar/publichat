@@ -32,15 +32,6 @@ fn send_messages(stream: &mut (impl Read + Write), msgs: &Vec<MessageSt>, first_
     }
     stream.write(&buffer[..msgs.len()*MSG_OUT_SIZE]).expect("failed to write buffer to steam.");
     stream.flush().expect("failed to flush");
-
-    /* 
-    // this was the old implementation it will be deleted at some point
-    for msg_id in 0..msgs.len() as u32 {
-        let mut index: usize= MSG_OUT_SIZE * msg_id as usize;
-        buffer[index..index+MSG_ID_SIZE].clone_from_slice(&msg_id.to_be_bytes());
-        index += MSG_ID_SIZE;
-        buffer[index..index+MSG_ST_SIZE].clone_from_slice(&msgs[msg_id as usize]);
-    }*/
 }
 
 pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) {
@@ -51,8 +42,11 @@ pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) {
 
     let mut st_buf = [0; MSG_ST_SIZE];
     loop {
-        stream.read_exact(&mut pad_buf).expect("failed to read smrt padding!");
-        
+        if let Err(_) = stream.read_exact(&mut pad_buf) {
+            println!("Failed to get first pad! Is the socket closed?");
+            break;
+        }
+
         match pad_buf {
             SEND_PADDING => {
                 stream.read_exact(&mut snd_buf).expect("failed to read msg");
@@ -95,9 +89,11 @@ pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) {
                 send_messages(&mut stream, &messages, id);
             },
             _ => {
-                println!("{:?}", pad_buf);  // invalid padding could be http, TODO
+                // invalid padding make this a warming
+                println!("Recived invalid smrt header: {:?}", pad_buf);  
                 break;
             }
         }
     }
+    println!("SMRT mainloop closed: {:?}", "ip_address");
 }
