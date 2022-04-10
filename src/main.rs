@@ -1,4 +1,4 @@
-use std::{net::TcpListener, io::Read, path::Path, sync::Arc, thread::Builder};
+use std::{net::{TcpListener, TcpStream}, path::Path, sync::Arc, thread::{self, Builder}};
 
 mod db;
 mod msg;
@@ -6,20 +6,22 @@ mod constants;
 mod http;
 mod smrt;
 mod ws;
-use constants::*;
+mod helpers;
 
+use constants::*;
+use helpers::*;
 
 const IP_PORT: &str = "localhost:7878";
 
 
-fn handle_incoming(mut stream: std::net::TcpStream, data_dir: Arc<Path>) {
+fn handle_incoming(mut stream: TcpStream, data_dir: Arc<Path>) -> Res {
     let mut pad_buf = [0; 4];
-    stream.read(&mut pad_buf).expect("failed to read first 3 bytes!");
+    read_exact(&mut stream, &mut pad_buf, "Failed to read protocol header")?;
 
     match &pad_buf {
         b"GET " => http::handle(stream, &data_dir),
         b"SMRT" => smrt::handle(stream, &data_dir),
-        _ => return,
+        _ => Err("Failed to match protocol header"),
     }
 }
 
@@ -38,7 +40,7 @@ fn main() {
     };
     println!("Using directory {:?}", data_dir.canonicalize().unwrap());
 
-    {  // testing db
+    for _ in 0..0 {  // testing db
         const COUNT: usize = 25;  // no more than 94
 
         let msgs: Vec<MessageSt> = (0..COUNT as u8).map(|i| {[i+b'!'; MSG_ST_SIZE]}).collect();
@@ -78,8 +80,23 @@ fn main() {
             };
 
             let builder = Builder::new().name(name);  // todo: stack size?
-            if let Err(e) = builder.spawn(|| handle_incoming(stream, data_dir)) {
-                println!("Failed to create thread: {}", e);
+            let handle = builder.spawn(|| {
+                println!("Started thread {}", thread::current().name().unwrap());
+                if let Err(e) = handle_incoming(stream, data_dir) {
+                    println!(
+                        "Thread {} finished with error:\n\t{e}",
+                        thread::current().name().unwrap(),
+                    );
+                } else {
+                    println!(
+                        "Thread {} finished with no errors :)",
+                        thread::current().name().unwrap(),
+                    );
+                }
+            });
+
+            if let Err(e) = handle {
+                println!("Failed to create thread: {e}");
             }
         } else {
             println!("failed to bind stream: {}", stream.err().unwrap());

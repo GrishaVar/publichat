@@ -1,6 +1,6 @@
 use std::{sync::Arc, io::{Read, Write}, path::Path};
 
-use crate::{constants::*, db, msg};
+use crate::{constants::*, db, msg, helpers::{Res, read_exact, full_write}};
 
 fn query_bytes_to_args(data: &[u8; 4]) -> (u32, u8, bool) {
     let forward = data[0] & 0x80 != 0;  // check first bit
@@ -15,11 +15,11 @@ fn get_chat_file(chat_id: &Hash, data_dir: &Path) -> std::path::PathBuf {
     data_dir.join(base64::encode_config(chat_id, Config::new(UrlSafe, false)))
 }
 
-fn send_messages(stream: &mut (impl Read + Write), msgs: &Vec<MessageSt>, first_id: u32) {
+fn send_messages(stream: &mut (impl Read + Write), msgs: &Vec<MessageSt>, first_id: u32) -> Res {
     // converts MessageSt to MessageOut and sends each into stream
     // msg::storage_to_packet
     // TcpStream::write
-    if msgs.len() == 0 { return }
+    if msgs.len() == 0 { return Ok(()) }
 
     let mut buffer = [0; MAX_FETCH_AMOUNT as usize * MSG_OUT_SIZE];
     for (i, msg) in msgs.iter().enumerate() {
@@ -30,11 +30,15 @@ fn send_messages(stream: &mut (impl Read + Write), msgs: &Vec<MessageSt>, first_
             first_id + i as u32,
         );  // todo: send one msg_id per packet to reduce redundant info
     }
-    stream.write(&buffer[..msgs.len()*MSG_OUT_SIZE]).expect("failed to write buffer to steam.");
-    stream.flush().expect("failed to flush");
+
+    full_write(
+        stream,
+        &buffer[..msgs.len()*MSG_OUT_SIZE],
+        "Failed to send messages in SMRT",
+    )
 }
 
-pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) {
+pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) -> Res {
     let mut pad_buf = [0; PADDING_SIZE];
     let mut snd_buf = [0; MSG_IN_SIZE];  // size of msg packet
     let mut chat_id_buf = [0; CHAT_ID_SIZE];
@@ -42,58 +46,46 @@ pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) {
 
     let mut st_buf = [0; MSG_ST_SIZE];
     loop {
-        if let Err(_) = stream.read_exact(&mut pad_buf) {
-            println!("Failed to get first pad! Is the socket closed?");
-            break;
-        }
-
+        read_exact(&mut stream, &mut pad_buf, "Failed to get first pad")?;
         match pad_buf {
             SEND_PADDING => {
-                stream.read_exact(&mut snd_buf).expect("failed to read msg");
-                stream.read_exact(&mut pad_buf).expect("failed to read end pad");  // todo: don't crash!
-                if pad_buf != END_PADDING { todo!() }  // verify end padding
+                read_exact(&mut stream, &mut snd_buf, "Failed to read cypher")?;
+                read_exact(&mut stream, &mut pad_buf, "Failed to read end pad (snd)")?;
+                if pad_buf != END_PADDING { return Err("Incorrect end padding (snd)") }
  
                 chat_id_buf = msg::packet_to_storage(&snd_buf, &mut st_buf);
-                db::push(&get_chat_file(&chat_id_buf, data_dir), &st_buf).expect("Failed to push to DB.");
+                db::push(&get_chat_file(&chat_id_buf, data_dir), &st_buf)?;
             },
             FETCH_PADDING => {
                 // fill fetch buffer
-                stream.read_exact(&mut chat_id_buf).expect("failed to read fch chat id");
-                stream.read_exact(&mut pad_buf).expect("failed to read end pad");  // todo: don't crash!
-                // check "end"
-                if pad_buf != END_PADDING { todo!() }  // verify end padding
+                read_exact(&mut stream, &mut chat_id_buf, "Failed to read fetch chat id")?;
+                read_exact(&mut stream, &mut pad_buf, "Failed to read end pad (fch)")?;
+                if pad_buf != END_PADDING { return Err("Incorrect end padding (fch)") }
 
                 // get arguments for the db fetch
                 let path = get_chat_file(&chat_id_buf, data_dir);
                 // todo: add count to fetch message
 
                 // fetch from db & send to client
-                let (id, messages) = db::fetch(&path, DEFAULT_FETCH_AMOUNT).unwrap();
-                send_messages(&mut stream, &messages, id);
+                let (id, messages) = db::fetch(&path, DEFAULT_FETCH_AMOUNT)?;
+                send_messages(&mut stream, &messages, id)?;
             },
             QUERY_PADDING => {
                 // fill chat_id and arg buffer
-                stream.read_exact(&mut chat_id_buf).expect("failed to read fch chat id");
-                stream.read_exact(&mut qry_arg_buf).expect("failed to read fch args");
-
-                // check "end"
-                stream.read_exact(&mut pad_buf).expect("failed to read end pad");
-                if pad_buf != END_PADDING { todo!() }  // verify end padding
+                read_exact(&mut stream, &mut chat_id_buf, "Failed to read query chat id")?;
+                read_exact(&mut stream, &mut qry_arg_buf, "Failed to read query args")?;
+                read_exact(&mut stream, &mut pad_buf, "Failed to read end pad (qry)")?;
+                if pad_buf != END_PADDING { return Err("Incorrect end padding (qry)") }
                 
                 // get arguments for the db fetch
                 let (msg_id, count, forward) = query_bytes_to_args(&qry_arg_buf);
                 let path = get_chat_file(&chat_id_buf, data_dir);
 
                 // return query
-                let (id, messages) = db::query(&path, msg_id, count, forward).unwrap();
-                send_messages(&mut stream, &messages, id);
+                let (id, messages) = db::query(&path, msg_id, count, forward)?;
+                send_messages(&mut stream, &messages, id)?;
             },
-            _ => {
-                // invalid padding make this a warming
-                println!("Recived invalid smrt header: {:?}", pad_buf);  
-                break;
-            }
+            _ => return Err("Recieved invalid SMRT header"),
         }
     }
-    println!("SMRT mainloop closed: {:?}", "ip_address");
 }
