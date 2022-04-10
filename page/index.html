@@ -9,67 +9,57 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/aes-js/4.0.0-beta.2/index.min.js" integrity="sha512-H9KqUQpRsqGUaA2pm2FkHZX4wFhgDwE70o2PUS0Cx7V1PJjBh2J5YZnSaI/u0m9zv/Cx3qvMI48/OZz7/o47xQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script type="text/javascript">
     main = function() {
-      document.getElementById('send_button').onclick = function() {message_to_bytes()};
-      document.getElementById('join_button').onclick = function() {
-        toggle_loop();
-        mainloop("");
-      };
+      document.getElementById('send_button').onclick = function() {send_message()};
+      document.getElementById('join_button').onclick = function() {toggle_loop(); mainloop("");};
       var ws_ip_port = 'ws://' + location.host + "/ws";
       const socket = new WebSocket(ws_ip_port);
       socket.onopen = function() {console.log("socket opened");};
-      socket.onerror = function(e) {console.log('ws error!'+e.code+e.reason);};
-      socket.onclose = function(e) {console.log('ws closed!'+e.code+e.reason);};
+      socket.onerror = function(e) {console.log('ws error!'+e.code+e.reason); loop=false;};
+      socket.onclose = function(e) {console.log('ws closed!'+e.code+e.reason); loop=false;};
       socket.onmessage = function(e) {ws_receive(e)};
       function ws_send(bytes) {
         if (socket.readyState != WebSocket.OPEN) {
           console.log('Tried sending to closed WS');
+          loop = false;
           return;
         }
         var outgoing = new Uint8Array(bytes);
         socket.send(outgoing);
-        // For printing and debugging
-        //var outbound_hex = aesjs.utils.hex.fromBytes(bytes);
-        //console.log("Sent:\n " + outbound_hex);
-        /*console.log("Sent: ");
-        console.log(outgoing);*/
-      };
-      function ws_receive(message_event) {
-        var blob = message_event.data;
-        reader.readAsArrayBuffer(blob);
-      }
-
-      function read_message_bytes(bytes) {
-        if (bytes == null || bytes == []) {
-          console.log('recevied empty');
-          return;
-        }
-        var message_byte_size = 172;
-        while(bytes.length > 0) {
-          var single_message = bytes.splice(0, message_byte_size);
-          bytes_to_message(single_message);
-          bytes = bytes.splice(message_byte_size, bytes.length);
-        }
       };
 
+      var struct = new JSPack();
+      var max_chat_id = Number.MIN_SAFE_INTEGER;
+      var min_chat_id = Number.MAX_SAFE_INTEGER;
+      var message_byte_size = 172;
+      
+      function get_title(){return document.getElementById('title').value;}
+      function get_password(){return document.getElementById('password').value;}
+      function get_message(){return document.getElementById('message_entry').value;}
+      function clear_messages(){document.getElementById('message_list').replaceChildren();}
+      
       var reader = new FileReader();
       reader.onload = function() {
         var result = reader.result;
         var bytes_u8_array = new Uint8Array(result);
         var bytes = Array.from(bytes_u8_array);
         read_message_bytes(bytes);
-        // For printing and debugging
-        /*console.log('received:');*/
-        //console.log(reader.result);
-      }
-      var struct = new JSPack();
-      var max_chat_id = 0;
-      var min_chat_id = Number.MAX_SAFE_INTEGER;
-      
+      };
+      function ws_receive(message_event) {
+        var blob = message_event.data;
+        reader.readAsArrayBuffer(blob);
+      };
 
-      function get_title(){return document.getElementById('title').value;}
-      function get_password(){return document.getElementById('password').value;}
-      function get_message(){return document.getElementById('message_entry').value;}
-      function clear_messages(){document.getElementById('message_list').replaceChildren();}
+      function read_message_bytes(bytes) {
+        if (bytes == null || bytes == []) {
+          console.log('recevied empty');
+          return;
+        }
+        while(bytes.length > 0) {
+          var single_message = bytes.splice(0, message_byte_size);
+          bytes_to_message(single_message);
+          bytes = bytes.splice(message_byte_size, bytes.length);
+        }
+      };
 
       function draw_on() {
         var title_div = document.getElementById('title_div');
@@ -106,7 +96,7 @@
           document.getElementById('join_button').remove();
           draw_on();
         }
-      }
+      };
 
       function mainloop(old_title) {
         var title = get_title();
@@ -115,55 +105,31 @@
           return;
         }
         // check if chat title has changed
-        if (title == old_title) {
-          console.log(max_chat_id);
-          query_messages(title, max_chat_id);
+        if (title == old_title && max_chat_id >= 0) {
+          query_messages(title);
         } else {
           // update chat list to new title
           clear_messages();
-          max_chat_id = 0;
+          max_chat_id = Number.MIN_SAFE_INTEGER;
           min_chat_id = Number.MAX_SAFE_INTEGER;
           fetch_messages(title);
         }
         setTimeout(function() {mainloop(title);}, 500);
       };
 
+      // Sending requests to GET messages
       function fetch_messages(title) {
         var chat_key = sha3_256.array(title);
         var chat_id = sha3_256.array(chat_key);
         var outbound_bytes = struct.Pack('3s32A3s', ["fch", chat_id, "end"]);
         ws_send(outbound_bytes);
       };
-      function query_messages(title, message_id) {
+      function query_messages(title) {
         var chat_key = sha3_256.array(title);
         var chat_id = sha3_256.array(chat_key);
         var query = 0xff_00_00_00 + max_chat_id;
         var outbound_bytes = struct.Pack('3s32AI3s', ["qry", chat_id, query, "end"]);
         ws_send(outbound_bytes);
-      };
-
-      function message_to_bytes() {      
-        // message: ["snd", chat_id, user_id, cypher, "end"]
-        var title = get_title();        // known by peers
-        var password = get_password();  // private
-        var message = get_message();    // known by peers
-        var epoch_time = Date.now();    // known by peers
-
-        var chat_key = sha3_256.array(title);  // known by peers
-        var chat_id = sha3_256.array(chat_key);  // chat key is public
-        var user_id = sha3_256.array(password);  // user id is public
-
-        message = message.padEnd(128);
-        var text_bytes = aesjs.utils.utf8.toBytes(message);
-        var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, new aesjs.Counter(1));
-        var encrypted_bytes = aes_cnt.encrypt(text_bytes);
-        
-        var pad_start = "snd";
-        var pad_end = "end";
-        var struct = new JSPack();
-        var outbound_bytes = struct.Pack('3s32A32A128A3s', [pad_start, chat_id, user_id, encrypted_bytes, pad_end]);
-        
-        ws_send(outbound_bytes); 
       };
 
       function bytes_to_message(bytes) {
@@ -186,7 +152,6 @@
         for (var i=0; i < time.length; i++) {
           epoch += BigInt(time[i]) << BigInt(((time.length-(i+1)) * 32));
         }
-        console.log(time, Number(epoch));
         var date = new Date(Number(epoch));
         var date_string = date.toLocaleString('en-GB', { hour12:false } );
 
@@ -200,7 +165,6 @@
 
         build_message(username_string, date_string, message_string)
       };
-      
       function build_message(username_string, date_string, message_string) {
         let message_list_div = document.getElementById('message_list');
 
@@ -224,9 +188,35 @@
         msg_div.appendChild(content_div);
         message_list_div.appendChild(msg_div);
       };
+
       function send_message() {
-        var bytes = message_to_bytes();
-        document.getElementById('message_entry').innerHTML = "";
+        var outbound_bytes = message_to_bytes();
+        console.log(123, document.getElementById('message_entry').value);
+        document.getElementById('message_entry').value = "";
+        ws_send(outbound_bytes); 
+        
+      };
+      function message_to_bytes() {      
+        // message: ["snd", chat_id, user_id, cypher, "end"]
+        var title = get_title();        // known by peers
+        var password = get_password();  // private
+        var message = get_message();    // known by peers
+        var epoch_time = Date.now();    // known by peers
+
+        var chat_key = sha3_256.array(title);  // known by peers
+        var chat_id = sha3_256.array(chat_key);  // chat key is public
+        var user_id = sha3_256.array(password);  // user id is public
+
+        message = message.padEnd(128);
+        var text_bytes = aesjs.utils.utf8.toBytes(message);
+        var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, new aesjs.Counter(1));
+        var encrypted_bytes = aes_cnt.encrypt(text_bytes);
+        
+        var pad_start = "snd";
+        var pad_end = "end";
+        var struct = new JSPack();
+        var outbound_bytes = struct.Pack('3s32A32A128A3s', [pad_start, chat_id, user_id, encrypted_bytes, pad_end]);
+        return outbound_bytes;
       };
     };
     window.onload = main;
