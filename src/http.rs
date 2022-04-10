@@ -31,10 +31,8 @@ fn handle_ws(req: &String, mut stream: TcpStream, data_dir: &Arc<Path>) {
     hasher.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
     let key_out = base64::encode(hasher.digest().bytes());
 
-    let mut buff = [0; 1024];  // clear all data
-    stream.read(&mut buff).ok();
-        // todo: think of a way to do it without allocating
-        // maybe check the Content-Length header
+    // Note: handle_ws assumes there is no more HTTP data left in the socket.
+    // All data in the socket from now on will be parsed by WS.
 
     stream.write(
         format!(
@@ -47,6 +45,12 @@ fn handle_ws(req: &String, mut stream: TcpStream, data_dir: &Arc<Path>) {
     ).unwrap();
     stream.flush().unwrap();
     println!("Finished handshake; moving on to smrt");
+
+    // drop heap stuff not needed for smrt::handle
+    drop(req); 
+    drop(hasher);
+    drop(key_in);  // this should be on stack but whatever
+    drop(key_out);
 
     // launch SMRT
     let mut stream = WsStream::new(stream);
@@ -68,9 +72,10 @@ fn handle_robots(stream: &mut TcpStream) {
 
 pub fn handle(mut stream: TcpStream, data_dir: &Arc<Path>) {
     // Handles GET requests (where first four bytes "GET " already consumed)
-    let mut buf = [0; 512];
+    let mut buf = [0; 1024];  // todo: think more about sizes
     stream.read(&mut buf).unwrap();
     let req = String::from_utf8_lossy(&buf).to_string();
+    // assert!(req.ends_with("\r\n\r\n"));  // todo: fill more if this crashes
 
     let path = match req.split(' ').nth(0) {
         Some(p) => p,
