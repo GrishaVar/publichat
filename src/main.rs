@@ -1,4 +1,4 @@
-use std::{net::TcpListener, io::Read, path::Path, sync::Arc};
+use std::{net::TcpListener, io::Read, path::Path, sync::Arc, thread::Builder};
 
 mod db;
 mod msg;
@@ -69,9 +69,20 @@ fn main() {
     });
 
     for stream in listener.incoming() {
-        let data_dir = data_dir.clone();
         if let Ok(stream) = stream {
-            std::thread::spawn(move || handle_incoming(stream, data_dir));
+            let data_dir = data_dir.clone();
+
+            let name = match stream.peer_addr() {
+                Ok(addr) => addr.to_string(),
+                Err(_) => "unknown".to_string(),
+            };
+
+            let builder = Builder::new().name(name);  // todo: stack size?
+            if let Err(e) = builder.spawn(|| handle_incoming(stream, data_dir)) {
+                println!("Failed to create thread: {}", e);
+            }
+        } else {
+            println!("failed to bind stream: {}", stream.err().unwrap());
         }
     }
 }
