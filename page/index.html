@@ -26,7 +26,7 @@
         var outgoing = new Uint8Array(bytes);
         socket.send(outgoing);
       };
-
+      
       var struct = new JSPack();
       var max_chat_id = Number.MIN_SAFE_INTEGER;
       var min_chat_id = Number.MAX_SAFE_INTEGER;
@@ -38,6 +38,8 @@
       function clear_messages(){document.getElementById('message_list').replaceChildren();}
       
       var reader = new FileReader();
+
+      // *********************************RECEVING*********************************
       reader.onload = function() {
         var result = reader.result;
         var bytes_u8_array = new Uint8Array(result);
@@ -60,78 +62,6 @@
           bytes = bytes.splice(message_byte_size, bytes.length);
         }
       };
-
-      function draw_on() {
-        var title_div = document.getElementById('title_div');
-        var stop_button = document.createElement("div");
-        var stop_square = document.createElement("div");
-        stop_button.onclick = function() {toggle_loop()};
-        stop_button.id = "stop_button";
-        stop_square.id = "stop_square";
-        stop_button.appendChild(stop_square);
-        title_div.appendChild(stop_button);
-      };
-      function draw_off() {
-        var title_div = document.getElementById('title_div');
-        var join_button = document.createElement("div");
-        var join_triangle_top = document.createElement("div");
-        var join_triangle_bot = document.createElement("div");
-        join_button.onclick = function() {toggle_loop()};
-        join_button.id = "join_button";
-        join_triangle_bot.id = "join_triangle_bot";
-        join_triangle_top.id = "join_triangle_top";  
-        join_button.appendChild(join_triangle_top);
-        join_button.appendChild(join_triangle_bot);
-        title_div.appendChild(join_button);
-      };
-
-      var loop = false;
-      function toggle_loop() {
-        if (loop) {
-          loop = false;
-          document.getElementById('stop_button').remove();
-          draw_off();
-        } else {
-          loop = true;
-          document.getElementById('join_button').remove();
-          draw_on();
-        }
-      };
-
-      function mainloop(old_title) {
-        var title = get_title();
-        if (title == "" || loop == false) {
-          setTimeout(function() {mainloop(title);}, 1000);
-          return;
-        }
-        // check if chat title has changed
-        if (title == old_title && max_chat_id >= 0) {
-          query_messages(title);
-        } else {
-          // update chat list to new title
-          clear_messages();
-          max_chat_id = Number.MIN_SAFE_INTEGER;
-          min_chat_id = Number.MAX_SAFE_INTEGER;
-          fetch_messages(title);
-        }
-        setTimeout(function() {mainloop(title);}, 500);
-      };
-
-      // Sending requests to GET messages
-      function fetch_messages(title) {
-        var chat_key = sha3_256.array(title);
-        var chat_id = sha3_256.array(chat_key);
-        var outbound_bytes = struct.Pack('3s32A3s', ["fch", chat_id, "end"]);
-        ws_send(outbound_bytes);
-      };
-      function query_messages(title) {
-        var chat_key = sha3_256.array(title);
-        var chat_id = sha3_256.array(chat_key);
-        var query = 0xff_00_00_00 + max_chat_id;
-        var outbound_bytes = struct.Pack('3s32AI3s', ["qry", chat_id, query, "end"]);
-        ws_send(outbound_bytes);
-      };
-
       function bytes_to_message(bytes) {
         //message: Message ID, Time, USER ID, Message cypher, Signature
         var unpack = struct.Unpack('I8A32A128A', bytes, 0);
@@ -188,10 +118,81 @@
         msg_div.appendChild(content_div);
         message_list_div.appendChild(msg_div);
       };
+      // *********************************MAINLOOP*********************************
+      function mainloop(old_title) {
+        var title = get_title();
+        if (title == "" || loop == false) {
+          setTimeout(function() {mainloop(title);}, 1000);
+          return;
+        }
+        // check if chat title has changed
+        if (title == old_title && max_chat_id >= 0) {
+          query_messages(title);
+        } else {
+          // update chat list to new title
+          clear_messages();
+          max_chat_id = Number.MIN_SAFE_INTEGER;
+          min_chat_id = Number.MAX_SAFE_INTEGER;
+          fetch_messages(title);
+        }
+        setTimeout(function() {mainloop(title);}, 500);
+      };
+      // *********************************BUTTONS*********************************
+      function draw_on() {
+        var title_div = document.getElementById('title_div');
+        var stop_button = document.createElement("div");
+        var stop_square = document.createElement("div");
+        stop_button.onclick = function() {toggle_loop()};
+        stop_button.id = "stop_button";
+        stop_square.id = "stop_square";
+        stop_button.appendChild(stop_square);
+        title_div.appendChild(stop_button);
+      };
+      function draw_off() {
+        var title_div = document.getElementById('title_div');
+        var join_button = document.createElement("div");
+        var join_triangle_top = document.createElement("div");
+        var join_triangle_bot = document.createElement("div");
+        join_button.onclick = function() {toggle_loop()};
+        join_button.id = "join_button";
+        join_triangle_bot.id = "join_triangle_bot";
+        join_triangle_top.id = "join_triangle_top";  
+        join_button.appendChild(join_triangle_top);
+        join_button.appendChild(join_triangle_bot);
+        title_div.appendChild(join_button);
+      };
+      var loop = false;
+      function toggle_loop() {
+        if (loop) {
+          loop = false;
+          document.getElementById('stop_button').remove();
+          draw_off();
+        } else {
+          loop = true;
+          document.getElementById('join_button').remove();
+          draw_on();
+        }
+      };
 
+      // *********************************QUERY/FETCH*********************************
+      function fetch_messages(title) {
+        var chat_key = sha3_256.array(title);
+        var chat_id = sha3_256.array(chat_key);
+        var outbound_bytes = struct.Pack('3s32A3s', ["fch", chat_id, "end"]);
+        ws_send(outbound_bytes);
+      };
+      function query_messages(title) {
+        var chat_key = sha3_256.array(title);
+        var chat_id = sha3_256.array(chat_key);
+        var query = 0xff_00_00_00 + max_chat_id;
+        var outbound_bytes = struct.Pack('3s32AI3s', ["qry", chat_id, query, "end"]);
+        ws_send(outbound_bytes);
+      };
+
+      // *********************************SENDING*********************************
       function send_message() {
         var outbound_bytes = message_to_bytes();
-        console.log(123, document.getElementById('message_entry').value);
+        if (outbound_bytes == null) {return;}
         document.getElementById('message_entry').value = "";
         ws_send(outbound_bytes); 
         
@@ -202,6 +203,7 @@
         var password = get_password();  // private
         var message = get_message();    // known by peers
         var epoch_time = Date.now();    // known by peers
+        if (message == "") {return null;}
 
         var chat_key = sha3_256.array(title);  // known by peers
         var chat_id = sha3_256.array(chat_key);  // chat key is public
