@@ -1,6 +1,6 @@
 use std::net::TcpStream;
 use std::collections::VecDeque;
-use std::io::{self, Write, Read};
+use std::io::{self, Write, Read, Error, ErrorKind};
 
 pub struct WsStream {
     tcp: TcpStream,
@@ -121,9 +121,13 @@ impl WsStream {
 
 impl Read for WsStream {
     fn read(&mut self, dest_buf: &mut [u8]) -> io::Result<usize> {
-        let req = dest_buf.len();
+        // Reads some data to the buffer. IF reading from TCP is
+        // needed, will read exactly ONE ws packet. Call read_exact
+        // to fill buffer completely.
 
-        while req > self.data.len() {  // read packets until buffer is full enough
+        while self.data.is_empty() {  // `if` would've probably been ok too
+            // no data in the buffer: read from TCP
+
             let mut header_buf = [0; 2];
             self.tcp.read_exact(&mut header_buf)?;
     
@@ -131,10 +135,10 @@ impl Read for WsStream {
             let len = loop {  // loop to get rid of all pings
                 match Self::parse_header(&header_buf) {
                     None => {
-                        return Err(io::Error::new(io::ErrorKind::Other, "failed to parse header"))
+                        return Err(Error::from(ErrorKind::Other))
                     },
                     Some((true, _)) => if self.pong(&header_buf).is_none() {
-                        return Err(io::Error::new(io::ErrorKind::Other, "failed to pong"))
+                        return Err(Error::from(ErrorKind::Other))
                     },
                     Some((false, len)) => break len,
                 }
@@ -143,7 +147,7 @@ impl Read for WsStream {
             // convert len byte into actual length
             let len = match self.get_true_len(len) {
                 Some(len) => len,
-                None => return Err(io::Error::new(io::ErrorKind::Other, "failed get true length"))
+                None => return Err(Error::from(ErrorKind::Other))
             };
     
             // get data
@@ -157,9 +161,10 @@ impl Read for WsStream {
             self.data.extend(&recieved_data[4..]);
         }
 
-        // enough data in buffer, return
-        dest_buf.fill_with(|| self.data.pop_front().unwrap());  // todo: some way of popping all at once?
-        Ok(req)
+        // There's something in the queue - move it to the buffer
+        let len = self.data.len().min(dest_buf.len());  // how many bytes can be filled in
+        dest_buf[..len].fill_with(|| self.data.pop_front().unwrap());  // can't fail
+        return Ok(len);
     }
 }
 
@@ -170,10 +175,7 @@ impl Write for WsStream {
                 self.tcp.write_all(&data)?;
                 Ok(buf.len())
             },
-            None => Err(io::Error::new(
-                io::ErrorKind::Other,
-                "too much data",
-            )),
+            None => Err(Error::from(ErrorKind::Other)),
         }
     }
 
