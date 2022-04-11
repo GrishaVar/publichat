@@ -15,11 +15,11 @@ fn get_chat_file(chat_id: &Hash, data_dir: &Path) -> std::path::PathBuf {
     data_dir.join(base64::encode_config(chat_id, Config::new(UrlSafe, false)))
 }
 
-fn send_messages(stream: &mut (impl Read + Write), msgs: &Vec<MessageSt>, first_id: u32) -> Res {
+fn send_messages(stream: &mut (impl Read + Write), msgs: &[MessageSt], first_id: u32) -> Res {
     // converts MessageSt to MessageOut and sends each into stream
     // msg::storage_to_packet
     // TcpStream::write
-    if msgs.len() == 0 { return Ok(()) }
+    if msgs.is_empty() { return Ok(()) }
 
     let mut buffer = [0; MAX_FETCH_AMOUNT as usize * MSG_OUT_SIZE];
     for (i, msg) in msgs.iter().enumerate() {

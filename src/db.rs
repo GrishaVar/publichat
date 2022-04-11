@@ -1,5 +1,5 @@
 use std::io::{Seek, SeekFrom, Read, BufReader, Write};
-use std::path::PathBuf;
+use std::path::Path;
 use std::fs::OpenOptions;
 
 use crate::MessageSt;
@@ -14,7 +14,7 @@ const NEG_MSG_ST_SIZE: i64 = -(MSG_ST_SIZE as i64);
 const EMPTY_RESPONSE: (u32, Vec<MessageSt>) = (0, Vec::new());  // doesn't allocate
 const MAX_FILE_SIZE: u64 = u32::MAX as u64 * MSG_ST_SIZE_U64;  // approx 700 GB
 
-pub fn push(path: &PathBuf, msg: &[u8; MSG_ST_SIZE]) -> Res {
+pub fn push(path: &Path, msg: &[u8; MSG_ST_SIZE]) -> Res {
     let mut file = OpenOptions::new()
         .append(true)  // no reading or writing, only append
         .create(true)  // create file if it doesn't already exist
@@ -25,7 +25,7 @@ pub fn push(path: &PathBuf, msg: &[u8; MSG_ST_SIZE]) -> Res {
 }
 
 pub fn fetch(
-    path: &PathBuf,
+    path: &Path,
     count: u8,
 ) -> Result<(u32, Vec<MessageSt>), &'static str> {
     // Returns vec of the last `count` messages and the id of the first one.
@@ -34,7 +34,7 @@ pub fn fetch(
         _ => return Ok(EMPTY_RESPONSE),  // no file => no contents
     };
 
-    if let Err(_) = file.seek(SeekFrom::End(i64::from(count) * NEG_MSG_ST_SIZE)) {
+    if file.seek(SeekFrom::End(i64::from(count) * NEG_MSG_ST_SIZE)).is_err() {
         file.seek(SeekFrom::Start(0)).map_err(|_| "Failed to seek from start")?;
     }
 
@@ -48,7 +48,7 @@ pub fn fetch(
     let mut res = Vec::with_capacity(count.into());
     let mut buff = [0; MSG_ST_SIZE];
     for _ in 0..count {  // todo: precompute count
-        if let Err(_) = file.read_exact(&mut buff) { break }
+        if file.read_exact(&mut buff).is_err() { break }
         res.push(buff);
     }
 
@@ -57,7 +57,7 @@ pub fn fetch(
 
 
 pub fn query(
-    path: &PathBuf,
+    path: &Path,
     id: u32,  // from which message
     mut count: u8,  // how many messages
     forward: bool,  // search forward or backward in time

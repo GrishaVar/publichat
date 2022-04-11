@@ -14,7 +14,7 @@ pub const MAX_FETCH_AMOUNT: u8 = 50;
 pub const DEFAULT_FETCH_AMOUNT: u8 = 50;
 
 pub type Hash       = [u8; HASH_SIZE];
-pub type RSA        = [u8; RSA_SIZE];
+pub type Rsa        = [u8; RSA_SIZE];
 pub type Contents   = [u8; CYPHER_SIZE];
 
 pub type MessageIn  = [u8; MSG_IN_SIZE];

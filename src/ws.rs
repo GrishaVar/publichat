@@ -12,7 +12,7 @@ impl WsStream {
         WsStream{ tcp, data: VecDeque::new() }
     }
 
-    pub fn handshake(&mut self, key_in: &[u8]) { todo!() }
+    pub fn handshake(&mut self, _key_in: &[u8]) { todo!() }
 
     fn wrap(data: &[u8]) -> Option<Vec<u8>> {
         let len = data.len();
@@ -79,7 +79,7 @@ impl WsStream {
         self.tcp.read_exact(&mut data[2..]).ok()?;
         
         // send it off
-        self.tcp.write(&data).ok()?;
+        self.tcp.write_all(&data).ok()?;
         self.tcp.flush().ok()?;
 
         Some(())
@@ -167,7 +167,7 @@ impl Write for WsStream {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         match Self::wrap(buf) {
             Some(data) => {
-                self.tcp.write(&data)?;
+                self.tcp.write_all(&data)?;
                 Ok(buf.len())
             },
             None => Err(io::Error::new(

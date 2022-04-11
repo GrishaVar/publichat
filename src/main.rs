@@ -40,14 +40,14 @@ fn main() {
     };
     println!("Using directory {:?}", data_dir.canonicalize().unwrap());
 
-    for _ in 0..0 {  // testing db
+    {  // testing db
         const COUNT: usize = 25;  // no more than 94
 
         let msgs: Vec<MessageSt> = (0..COUNT as u8).map(|i| {[i+b'!'; MSG_ST_SIZE]}).collect();
         let path = data_dir.join("test.msgs");
 
         let t1 = std::time::SystemTime::now();
-        for msg in msgs.iter() {db::push(&path, &msg).unwrap()}
+        for msg in msgs.iter() {db::push(&path, msg).unwrap()}
 
         let t2 = std::time::SystemTime::now();
         for i in 0..COUNT {

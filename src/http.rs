@@ -23,7 +23,7 @@ fn handle_file(file: &str, stream: &mut TcpStream) -> Res {
     )
 }
 
-fn handle_ws(req: &String, mut stream: TcpStream, data_dir: &Arc<Path>) -> Res {
+fn handle_ws(req: String, mut stream: TcpStream, data_dir: &Arc<Path>) -> Res {
     // handshake
     let key_in = match req.split("Sec-WebSocket-Key: ").nth(1) {
         Some(val) => &val[..24],
@@ -55,9 +55,8 @@ fn handle_ws(req: &String, mut stream: TcpStream, data_dir: &Arc<Path>) -> Res {
     )?;
 
     // drop heap stuff not needed for smrt::handle
-    drop(req); 
+    drop(req);  // this is why req is passed directly
     drop(hasher);
-    drop(key_in);  // this should be on stack but whatever
     drop(key_out);
 
     // launch SMRT
@@ -84,11 +83,11 @@ fn handle_robots(stream: &mut TcpStream) -> Res {
 pub fn handle(mut stream: TcpStream, data_dir: &Arc<Path>) -> Res {
     // Handles GET requests (where first four bytes "GET " already consumed)
     let mut buf = [0; 1024];  // todo: think more about sizes
-    if let Err(_) = stream.read(&mut buf) { return Err("Failed to read HTTP packet") }
+    if stream.read(&mut buf).is_err() { return Err("Failed to read HTTP packet") }
     let req = String::from_utf8_lossy(&buf).to_string();
     // assert!(req.ends_with("\r\n\r\n"));  // todo: fill more if this crashes
 
-    let path = match req.split(' ').nth(0) {
+    let path = match req.split(' ').next() {
         Some(p) => p,
         None => return Err("Failed to find HTTP path"),  // faulty HTTP
     };
@@ -97,7 +96,7 @@ pub fn handle(mut stream: TcpStream, data_dir: &Arc<Path>) -> Res {
         "/" | ""        => handle_file("page/index.html", &mut stream),
         "/favicon.ico"  => handle_file("page/favicon.ico", &mut stream),
         "/jspack.js"    => handle_file("page/jspack.js", &mut stream),  // todo: remove
-        "/ws"           => handle_ws(&req, stream, data_dir),  // start WS
+        "/ws"           => handle_ws(req, stream, data_dir),  // start WS
         "/robots.txt"   => handle_robots(&mut stream),
         _               => handle_http_code(&mut stream, 404),  // reject everything else
     }
