@@ -81,7 +81,7 @@ fn main() {
 
             let builder = Builder::new().name(name);  // todo: stack size?
             let handle = builder.spawn(|| {
-                println!("Started thread {}", thread::current().name().unwrap());
+                println!("Started  {}", thread::current().name().unwrap());
                 if let Err(e) = handle_incoming(stream, data_dir) {
                     println!(
                         "Thread {} finished with error:\n\t{e}",
@@ -89,7 +89,7 @@ fn main() {
                     );
                 } else {
                     println!(
-                        "Thread {} finished with no errors :)",
+                        "Finished {} (no errors)",
                         thread::current().name().unwrap(),
                     );
                 }

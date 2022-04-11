@@ -46,7 +46,11 @@ pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) -> Res {
 
     let mut st_buf = [0; MSG_ST_SIZE];
     loop {
-        read_exact(&mut stream, &mut pad_buf, "Failed to get first pad")?;
+        read_exact(
+            &mut stream,
+            &mut pad_buf,
+            "Failed to read SMRT pad. Socket timed out?",
+        )?;
         match pad_buf {
             SEND_PADDING => {
                 read_exact(&mut stream, &mut snd_buf, "Failed to read cypher")?;
