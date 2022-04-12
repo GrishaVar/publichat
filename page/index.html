@@ -76,10 +76,15 @@
           console.log('recevied empty');
           return;
         }
+        var last_message = null;
+        // Checks current scroll height (this needs to be checked BEFORE the message is added)
+        var scroll_on_new_msg = (window.innerHeight + window.scrollY) >= document.body.offsetHeight;
         while(bytes.length > 0) {
           var single_message = bytes.splice(0, message_byte_size);
-          bytes_to_message(single_message);
+          last_message = bytes_to_message(single_message);
         }
+        // scroll to bottom if user is already at bottom
+        if (scroll_on_new_msg) {last_message.scrollIntoView();}
       };
       function bytes_to_message(bytes) {
         //message: Message ID, Time, USER ID, Message cypher, Signature
@@ -112,7 +117,7 @@
         var decrypted_bytes = decrypted_bytes_with_padding.slice(0, -decrypted_bytes_with_padding.slice(-1));
         var message_string = aesjs.utils.utf8.fromBytes(decrypted_bytes); 
 
-        build_message(username_string, date_string, message_string)
+        return build_message(username_string, date_string, message_string);
       };
       function build_message(username_string, date_string, message_string) {
         let message_list_div = document.getElementById('message_list');
@@ -135,6 +140,7 @@
         msg_div.appendChild(time_div);
         msg_div.appendChild(content_div);
         message_list_div.appendChild(msg_div);
+        return msg_div;
       };
       // *********************************MAINLOOP*********************************
       function mainloop(old_title) {
