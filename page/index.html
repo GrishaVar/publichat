@@ -31,6 +31,7 @@
       var max_chat_id = Number.MIN_SAFE_INTEGER;
       var min_chat_id = Number.MAX_SAFE_INTEGER;
       var message_byte_size = 172;
+      var message_concent_lenght = 128;
       
       function get_title(){return document.getElementById('title').value;}
       function get_password(){return document.getElementById('password').value;}
@@ -88,9 +89,9 @@
         var title = get_title();
         var chat_key = sha3_256.array(title);
         var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, new aesjs.Counter(1));
-        var decrypted_bytes = aes_cnt.decrypt(encrypted_bytes);
+        var decrypted_bytes_with_padding = aes_cnt.decrypt(encrypted_bytes);
+        var decrypted_bytes = decrypted_bytes_with_padding.slice(0, -decrypted_bytes_with_padding.slice(-1));
         var message_string = aesjs.utils.utf8.fromBytes(decrypted_bytes); 
-        //console.log(message_string);
 
         build_message(username_string, date_string, message_string)
       };
@@ -171,7 +172,6 @@
           draw_on();
         }
       };
-
       // *********************************QUERY/FETCH*********************************
       function fetch_messages(title) {
         var chat_key = sha3_256.array(title);
@@ -193,7 +193,16 @@
         if (outbound_bytes == null) {return;}
         document.getElementById('message_entry').value = "";
         ws_send(outbound_bytes); 
-        
+      };
+      function pad_message(message) {
+        var message = aesjs.utils.utf8.toBytes(message);
+        var pad_lenght = message_concent_lenght - message.length;
+        var padding = Array(pad_lenght).fill(pad_lenght);
+        // concatinate the arrays
+        var padded_message = new Uint8Array(message_concent_lenght);
+        padded_message.set(message);
+        padded_message.set(padding, message.length);
+        return padded_message;
       };
       function message_to_bytes() {      
         // message: ["snd", chat_id, user_id, cypher, "end"]
@@ -207,8 +216,7 @@
         var chat_id = sha3_256.array(chat_key);  // chat key is public
         var user_id = sha3_256.array(password);  // user id is public
 
-        message = message.padEnd(128);
-        var text_bytes = aesjs.utils.utf8.toBytes(message);
+        var text_bytes = pad_message(message);
         var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, new aesjs.Counter(1));
         var encrypted_bytes = aes_cnt.encrypt(text_bytes);
         
@@ -324,7 +332,6 @@
       width: 45px;
       height: 45px;
       padding: 16px;
-
       border-radius: 45%;
 
       background: #6a197d;
