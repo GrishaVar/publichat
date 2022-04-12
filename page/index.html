@@ -40,6 +40,25 @@
       
       var reader = new FileReader();
 
+      // *******************************CHAR_COUNTER*******************************
+      var content_div = document.getElementById("message_entry");
+      var counter_div = document.getElementById("content_counter");
+      content_div.addEventListener("keyup",keystroke_input);
+      function keystroke_input(event) {
+        // send with enter (enter == 13)
+        if(event.keyCode === 13) {send_message();}
+        // update colour and value of message length counter
+        var textLength = content_div.value.length;
+        counter_div.textContent = textLength + "/" + (message_concent_lenght-1);
+        if(textLength >= message_concent_lenght-1){
+          content_div.style.borderColor = "#ff2851";
+          counter_div.style.color = "#ff2851";
+        } else{
+          content_div.style.borderColor = "#6a197d";
+          counter_div.style.color = "#757575";
+        }
+      };
+
       // *********************************RECEVING*********************************
       reader.onload = function() {
         var result = reader.result;
@@ -322,6 +341,16 @@
       font-family: verdana;
     }
 
+    .content_counter{
+      position: fixed;
+      text-align: right;
+      float: right;
+      bottom: 0.4%;
+      right: 100px;
+      z-index: 200;
+      color: #757575;
+    }
+
     #send_button {
       float: right;
       position: absolute;
@@ -435,7 +464,9 @@
     <div class="bottom">
       <div class="inputs">
         <input type="text" class="password" id="password" placeholder="Secret Identifier" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-        <input type="text" class="message_entry" id="message_entry" placeholder="Write message here..." >
+        <input type="text" class="message_entry" id="message_entry" placeholder="Write message here..." maxlength="127">
+        <p class="content_counter" id="content_counter">0/127</p>
+        
       </div>
       <div id="send_button">
         <div id="triangle_top"></div>
