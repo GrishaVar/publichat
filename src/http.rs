@@ -97,6 +97,7 @@ pub fn handle(mut stream: TcpStream, data_dir: &Arc<Path>) -> Res {
         "/favicon.ico"  => handle_file("page/favicon.ico", &mut stream),
         "/jspack.js"    => handle_file("page/jspack.js", &mut stream),  // todo: remove
         "/client.js"    => handle_file("page/client.js", &mut stream),
+        "/mobile" | "/m"=> handle_file("page/mobile.html", &mut stream),
         "/ws"           => handle_ws(req, stream, data_dir),  // start WS
         "/robots.txt"   => handle_robots(&mut stream),
         _               => handle_http_code(&mut stream, 404),  // reject everything else
