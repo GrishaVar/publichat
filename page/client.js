@@ -17,11 +17,14 @@ main = function() {
     socket.send(outgoing);
   };
 
-  var struct = new JSPack();
   var max_chat_id = Number.MIN_SAFE_INTEGER;
   var min_chat_id = Number.MAX_SAFE_INTEGER;
   var message_byte_size = 172;
   var message_concent_lenght = 128;
+  var fch_padding = [102, 99, 104]; //"fch"
+  var qry_padding = [113, 114, 121]; //"qry"
+  var end_padding = [101, 110, 100]; //"end"
+  var snd_padding = [115, 110, 100]; //"snd"
 
   function get_title(){return document.getElementById('title').value;}
   function get_password(){return document.getElementById('password').value;}
@@ -29,6 +32,25 @@ main = function() {
   function clear_messages(){document.getElementById('message_list').replaceChildren();}
 
   var reader = new FileReader();
+
+  // *******************************CHAR_COUNTER*******************************
+  function unpack_number(bytes) {
+    res = 0;
+    for (var i = 0; i<bytes.length; i++) {
+      res *= 256;  // this is the same as res << 8 but also works for number > 32 bit
+      res += bytes[i];
+    }
+    return res;
+  };
+  function pack_number(num, size) {
+    res = []
+    for (var i = 0; i<size; i++) {
+      res.unshift(num & 0xff);
+      num = num >>> 8;
+    }
+    if (num > 0) {console.log("warning num did not fit in array size")}
+    return res;
+  };
 
   // *******************************CHAR_COUNTER*******************************
   var content_div = document.getElementById("message_entry");
@@ -82,26 +104,20 @@ main = function() {
   };
   function bytes_to_message(bytes) {
     //message: Message ID, Time, USER ID, Message cypher, Signature
-    var unpack = struct.Unpack('I8A32A128A', bytes, 0);
-    var message_id = unpack[0];  // load this into a global variable
-    var time_bytes = unpack[1];
-    var user_id = aesjs.utils.hex.fromBytes(unpack[2]);
-    var encrypted_bytes = unpack[3];
-    //var Signature = unpack[4];   // veryify this at some point
+    var message_id = unpack_number(bytes.splice(0, 4)); // 4 bytes
+    var time = unpack_number(bytes.splice(0, 8)); // 8 bytes
+    var user_id = aesjs.utils.hex.fromBytes(bytes.splice(0, 32)); // 32 bytes
+    var encrypted_bytes = bytes.splice(0, 128);
+    //var Signature = bytes.splice(0, 128);   // veryify this at some point*/
     max_chat_id = Math.max(max_chat_id, message_id);
     min_chat_id = Math.min(min_chat_id, message_id);
     // username
     var username_string = user_id.slice(0,20); // check if user is the empty hash sha3("")
     if (user_id == "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"){
-      username_string = "507550anonymous"; // 507550 is hex for green
+      username_string = "79985aAnonymous"; // 507550 is hex for green
     }
     // date string
-    var time = struct.Unpack('2L', time_bytes, 0);
-    var epoch = 0n;
-    for (var i=0; i < time.length; i++) {
-      epoch += BigInt(time[i]) << BigInt(((time.length-(i+1)) * 32));
-    }
-    var date = new Date(Number(epoch));
+    var date = new Date(Number(time));
     var date_string = date.toLocaleString('en-GB', { hour12:false } );
     // message text
     var title = get_title();
@@ -181,15 +197,13 @@ main = function() {
   function fetch_messages(title) {
     var chat_key = sha3_256.array(title);
     var chat_id = sha3_256.array(chat_key);
-    var outbound_bytes = struct.Pack('3s32A3s', ["fch", chat_id, "end"]);
-    ws_send(outbound_bytes);
+    ws_send([].concat(fch_padding, chat_id, end_padding));
   };
   function query_messages(title) {
     var chat_key = sha3_256.array(title);
     var chat_id = sha3_256.array(chat_key);
-    var query = 0xff_00_00_00 + max_chat_id;
-    var outbound_bytes = struct.Pack('3s32AI3s', ["qry", chat_id, query, "end"]);
-    ws_send(outbound_bytes);
+    var query = [0xff].concat(pack_number(max_chat_id, 3));
+    ws_send([].concat(qry_padding, chat_id, query, end_padding));
   };
 
   // *********************************SENDING*********************************
@@ -197,7 +211,9 @@ main = function() {
     var outbound_bytes = message_to_bytes();
     if (outbound_bytes == null) {return;}
     document.getElementById('message_entry').value = "";
+    counter_div.textContent = "0/" + message_concent_lenght;
     ws_send(outbound_bytes);
+    
   };
   function pad_message(message) {
     var message = aesjs.utils.utf8.toBytes(message);
@@ -222,12 +238,9 @@ main = function() {
 
     var text_bytes = pad_message(message);
     var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, new aesjs.Counter(1));
-    var encrypted_bytes = aes_cnt.encrypt(text_bytes);
+    var encrypted_bytes = Array.from(aes_cnt.encrypt(text_bytes));
 
-    var pad_start = "snd";
-    var pad_end = "end";
-    var struct = new JSPack();
-    var outbound_bytes = struct.Pack('3s32A32A128A3s', [pad_start, chat_id, user_id, encrypted_bytes, pad_end]);
-    return outbound_bytes;
+    console.log([].concat(snd_padding, chat_id, user_id, encrypted_bytes, end_padding));
+    return [].concat(snd_padding, chat_id, user_id, encrypted_bytes, end_padding);
   };
 };
