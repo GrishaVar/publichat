@@ -77,7 +77,7 @@ main = function() {
     document.getElementById('join_stop_button').style.backgroundColor = "#ef0000";
     document.getElementById('send_button').style.backgroundColor = "#ef0000";
   }
-
+  
   // *********************************RECEVING*********************************
   reader.onload = function() {
     var result = reader.result;
@@ -154,7 +154,7 @@ main = function() {
   // *********************************MAINLOOP*********************************
   function mainloop(old_title) {
     var title = get_title();
-    if (title == "" || loop == false) {
+    if (title == "") {
       setTimeout(function() {mainloop(title);}, 1000);
       return;
     }
@@ -240,7 +240,8 @@ main = function() {
     var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, new aesjs.Counter(1));
     var encrypted_bytes = Array.from(aes_cnt.encrypt(text_bytes));
 
-    console.log([].concat(snd_padding, chat_id, user_id, encrypted_bytes, end_padding));
     return [].concat(snd_padding, chat_id, user_id, encrypted_bytes, end_padding);
   };
+  
+  mainloop("");
 };
