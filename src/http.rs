@@ -4,6 +4,14 @@ use crate::smrt;
 use crate::ws::WsStream;
 use crate::helpers::{Res, full_write, Globals};
 
+fn send_code(code: u16, stream: &mut TcpStream) -> Res {
+    full_write(
+        stream,
+        format!("HTTP/1.1 {}\r\n\r\n", code).as_bytes(),
+        "Failed to send HTTP status code"
+    )
+}
+
 fn send_data(code: u16, data: &[u8], stream: &mut TcpStream) -> Res {
     let header_string = format!(
         "HTTP/1.1 {}\r\nContent-Length: {}\r\n\r\n",
@@ -16,6 +24,35 @@ fn send_data(code: u16, data: &[u8], stream: &mut TcpStream) -> Res {
         &[header_string.as_bytes(), data].concat(),
         "Failed to send file",
     )
+}
+
+fn handle_robots(stream: &mut TcpStream) -> Res {
+    const RESP_ROBOTS: &[u8] = b"\
+        HTTP/1.1 200\r\n\
+        Content-Length: 25\r\n\r\n\
+        User-agent: *\nDisallow: /
+    ";
+    full_write(stream, RESP_ROBOTS, "Failed to send robots")
+}
+
+fn handle_version(stream: &mut TcpStream) -> Res {
+    let output = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .output()  // TODO: consider using reader to avoid Vec allocation?
+        .map_err(|_| "Failed to exec git command")?;
+
+    let hash = output.stdout;  // has a \n at the end!
+    if hash.len() != 41 { return Err("Retrieved hash not 40 charachters") }
+
+    // this next part is pretty sinful, but avoids allocations (hash len = 40)
+    const HEADER: &[u8; 76] = b"\
+        HTTP/1.1 200\r\n\
+        Content-Length: 40\r\n\r\n\
+        1234567890123456789012345678901234567890";  // these are 40 charachters
+    let mut data = *HEADER;
+    data[HEADER.len()-40..].copy_from_slice(&hash[..40]);
+
+    full_write(stream, &data, "Failed to send commit hash")
 }
 
 fn handle_ws(req: &str, mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
@@ -56,43 +93,6 @@ fn handle_ws(req: &str, mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
     // launch SMRT
     let mut stream = WsStream::new(stream);
     smrt::handle(&mut stream, globals)
-}
-
-fn send_code(code: u16, stream: &mut TcpStream) -> Res {
-    full_write(
-        stream,
-        format!("HTTP/1.1 {}\r\n\r\n", code).as_bytes(),
-        "Failed to send HTTP status code"
-    )
-}
-
-fn handle_robots(stream: &mut TcpStream) -> Res {
-    const RESP_ROBOTS: &[u8] = b"\
-        HTTP/1.1 200\r\n\
-        Content-Length: 25\r\n\r\n\
-        User-agent: *\nDisallow: /
-    ";
-    full_write(stream, RESP_ROBOTS, "Failed to send robots")
-}
-
-fn handle_version(stream: &mut TcpStream) -> Res {
-    let output = std::process::Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .output()  // TODO: consider using reader to avoid Vec allocation?
-        .map_err(|_| "Failed to exec git command")?;
-
-    let hash = output.stdout;  // has a \n at the end!
-    if hash.len() != 41 { return Err("Retrieved hash not 40 charachters") }
-
-    // this next part is pretty sinful, but avoids allocations (hash len = 40)
-    const HEADER: &[u8; 76] = b"\
-        HTTP/1.1 200\r\n\
-        Content-Length: 40\r\n\r\n\
-        1234567890123456789012345678901234567890";  // these are 40 charachters
-    let mut data = *HEADER;
-    data[HEADER.len()-40..].copy_from_slice(&hash[..40]);
-
-    full_write(stream, &data, "Failed to send commit hash")
 }
 
 pub fn handle(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
