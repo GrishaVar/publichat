@@ -1,7 +1,7 @@
 main = function() {
   document.getElementById('send_button').onclick = function() {send_message()};
   document.getElementById('join_stop_button').onclick = function() {toggle_loop();};
-  var ws_ip_port = 'ws://' + location.host + "/ws";
+  var ws_ip_port = 'wss://' + location.host + "/ws";
   const socket = new WebSocket(ws_ip_port);
   socket.onopen = function() {console.log("socket opened");};
   socket.onerror = function(e) {shutdown(e)};
@@ -21,10 +21,10 @@ main = function() {
   var min_chat_id = Number.MAX_SAFE_INTEGER;
   var message_byte_size = 172;
   var message_concent_lenght = 128;
-  var fch_padding = [102, 99, 104]; //"fch"
+  var fch_padding = [102,  99, 104]; //"fch"
   var qry_padding = [113, 114, 121]; //"qry"
-  var end_padding = [101, 110, 100]; //"end"
   var snd_padding = [115, 110, 100]; //"snd"
+  var end_padding = [101, 110, 100]; //"end"
 
   function get_title(){return document.getElementById('title').value;}
   function get_password(){return document.getElementById('password').value;}
