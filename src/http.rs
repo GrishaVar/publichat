@@ -1,5 +1,4 @@
 use std::{net::TcpStream, sync::Arc, io::Read};
-use sha1_smol::Sha1;
 use crate::smrt;
 use crate::ws::WsStream;
 use crate::helpers::{Res, full_write, Globals};
@@ -64,31 +63,7 @@ fn handle_ws(req: &str, mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
             return Err("Couldn't find WS key");
         },
     };
-    let mut hasher = Sha1::new();
-    hasher.update(key_in.as_bytes());
-    hasher.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
-    let key_out = base64::encode(hasher.digest().bytes());
-
-    // Note: handle_ws assumes there is no more HTTP data left in the socket.
-    // All data in the socket from now on will be parsed by WS.
-
-    let response = format!(
-        "HTTP/1.1 101 Switching Protocols\r\n\
-        Upgrade: websocket\r\n\
-        Connection: Upgrade\r\n\
-        Sec-WebSocket-Accept: {}\r\n\r\n",
-        key_out,
-    );
-
-    full_write(
-        &mut stream,
-        response.as_bytes(),
-        "Failed to send WS upgrade accept packet"
-    )?;
-
-    // drop heap stuff not needed for smrt::handle
-    drop(hasher);
-    drop(key_out);
+    WsStream::handshake(&mut stream, key_in)?;
 
     // launch SMRT
     let mut stream = WsStream::new(stream);

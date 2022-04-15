@@ -1,6 +1,9 @@
 use std::net::TcpStream;
 use std::collections::VecDeque;
 use std::io::{self, Write, Read, Error, ErrorKind};
+use sha1_smol::Sha1;
+
+use crate::{Res, full_write};
 
 pub struct WsStream {
     tcp: TcpStream,
@@ -9,10 +12,30 @@ pub struct WsStream {
 
 impl WsStream {
     pub fn new(tcp: TcpStream) -> Self {
+        // expects handshake to already be completed!
         WsStream{ tcp, data: VecDeque::new() }
     }
 
-    pub fn handshake(&mut self, _key_in: &[u8]) { todo!() }
+    pub fn handshake(stream: &mut TcpStream, key_in: &str) -> Res {
+        // Takes a TcpStream and a key_in, responds with HTTP handshake packet
+        let mut hasher = Sha1::new();
+        hasher.update(key_in.as_bytes());
+        hasher.update(b"258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+        let key_out = base64::encode(hasher.digest().bytes());
+
+        const HS_END: &[u8] = b"\r\n\r\n";  // no allocs, but is it faster?
+        const HS_START: &[u8] = b"\
+            HTTP/1.1 101 Switching Protocols\r\n\
+            Upgrade: websocket\r\n\
+            Connection: Upgrade\r\n\
+            Sec-WebSocket-Accept: ";
+
+        full_write(
+            stream,
+            &[HS_START, key_out.as_bytes(), HS_END].concat(),
+            "Failed to send handshake response",
+        )
+    }
 
     fn wrap(data: &[u8]) -> Option<Vec<u8>> {
         let len = data.len();
