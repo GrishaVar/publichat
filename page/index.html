@@ -1,193 +1,191 @@
 <!DOCTYPE html>
 <html lang="">
   <head>
-  <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
-  <meta content="utf-8" http-equiv="encoding">
-    
-  <script src="jspack.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha3/0.8.0/sha3.min.js" integrity="sha512-PmGDkK2UHGzTUfkFGcJ8YSrD/swUXekcca+1wWlrwALIZho9JX+3ddaaI9wmmf8PmgDIpMtx6TU8YBJAZS0mPQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/aes-js/4.0.0-beta.2/index.min.js" integrity="sha512-H9KqUQpRsqGUaA2pm2FkHZX4wFhgDwE70o2PUS0Cx7V1PJjBh2J5YZnSaI/u0m9zv/Cx3qvMI48/OZz7/o47xQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script type="text/javascript" src="client.js"></script>
-  <script type="text/javascript">window.onload = main;</script>
-
-  <style>
-    body {
-      background: #f5f5f5
-    }
-    .everything{
-      width: 100%;
-      height: 100%;
-    }
-    /* *********TOP********** */
-    .title{
-      position: fixed;
-      top: 0px;
-      left: 0px;
-      width: 100%;
-      height: 50px;
-      background: #E0DEDE;
-      border: none;
-      border-bottom: 3px solid #6a197d;
-      font-size: 30px;
-      font-family: verdana;
-    }
-    /* *********BOTTOM********** */
-    .bottom{ 
-      bottom: 0px;
-      left: 0px;
-      position: fixed;
-      background: #E0DEDE;
-      width: 100%;
-      height: 95px;
-    }
-    .inputs{ 
-      width: 96%;
-      float: left;
-    }
-    .password{
-      width: 100%;
-      height: 30px;
-      background: #E0DEDE;
-      margin: none;
-      border: none;
-      font-size: 30px;
-      font-family: verdana;
-      margin: 2px 1% 2px;
-    }
-    .message_entry{
-      width: 100%;
-      height: 50px;
-      background: #E0DEDE;
-      margin: none;
-      border: none;
-      border-top: 3px solid #6a197d;
-      font-size: 22px;
-      font-family: verdana;
-    }    
-    .content_counter{
-      position: fixed;
-      text-align: right;
-      float: right;
-      bottom: 0.4%;
-      right: 100px;
-      z-index: 200;
-      color: #757575;
-    }
-    /* *********MSG_LIST********** */
-    .message_list{
-      width: 99%;
-      margin-top:  60px;
-      margin-bottom: 100px;
-    }
-    .message{
-      border-radius: 12px;
-      background: #e2cee7;
-      margin-bottom:  15px;
-      margin-left:  10px;
-      margin-right:  10px;
-    }
-    .username{
-      margin-left:  10px;
-      border-bottom: 1px solid #6a197d;
-      font-size: 14px;
-      font-family: verdana;
-    }
-    .time{
-      margin-left:  6px;
-      font-size: 10px;
-      font-family: verdana;
-    }
-    .content{
-      margin-left:  7px;
-      font-size: 17px;
-      font-family: verdana;
-      overflow-wrap: break-word;
-    }
-    /* *********BUTTONS********** */
-    #send_button {
-      float: right;
-      position: absolute;
-      z-index: 100;
-      top: 10px;
-      right: 10px;
-
-      width: 45px;
-      height: 45px;
-      padding: 16px;
-      border-radius: 45%;
-
-      background: #6a197d;
-    }
-    #triangle_top {
-      position: absolute;
-      /* position */
-      top: 12px;
-      left: 16px;
-      /* size */
-      border-bottom: 25px solid white;
-      border-right: 55px solid transparent;
-    }
-    #triangle_bot {
-      position: absolute;
-      /* position */
-      top: 39px;
-      left: 16px;
-      /* size */
-      border-top: 25px solid white;
-      border-right: 55px solid transparent;
-    }
-    #join_stop_button {
-      float: right;
-      position: fixed;
-      z-index: 100;
-      top: 4px;
-      right: 10px;
-
-      width: 33px;
-      height: 33px;
-      padding: 6px;
-
-      border-radius: 40%;
-      background: #6a197d;
-    }
-    #join_triangle_top {
-      position: absolute;
-      /* position */
-      top: 9px;
-      left: 12px;
-      /* size */
-      border-bottom: 13px solid white;
-      border-right: 25px solid transparent;
-    }
-    #join_triangle_bot {
-      position: absolute;
-      /* position */
-      top: 22px;
-      left: 12px;
-      /* size */
-      border-top: 13px solid white;
-      border-right: 25px solid transparent;
-    }
-    #stop_square {
-      position: absolute;
-      /* position */
-      top: 12px;
-      left: 12px;
-      /* size */
-      border-top: 21px solid white;
-      border-right: 21px solid white;
-    }
-
-  </style>
     <title>Publichat</title>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+    <meta content="utf-8" http-equiv="encoding">
+      
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha3/0.8.0/sha3.min.js" integrity="sha512-PmGDkK2UHGzTUfkFGcJ8YSrD/swUXekcca+1wWlrwALIZho9JX+3ddaaI9wmmf8PmgDIpMtx6TU8YBJAZS0mPQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aes-js/4.0.0-beta.2/index.min.js" integrity="sha512-H9KqUQpRsqGUaA2pm2FkHZX4wFhgDwE70o2PUS0Cx7V1PJjBh2J5YZnSaI/u0m9zv/Cx3qvMI48/OZz7/o47xQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script type="text/javascript" src="client.js"></script>
+    <script type="text/javascript">window.onload = main;</script>
+
+    <style>
+      body {
+        background: #f5f5f5
+      }
+      .everything{
+        width: 100%;
+        height: 100%;
+      }
+      /* *********TOP********** */
+      .title{
+        position: fixed;
+        top: 0px;
+        left: 0px;
+        width: 100%;
+        height: 50px;
+        background: #E0DEDE;
+        border: none;
+        border-bottom: 3px solid #6a197d;
+        font-size: 30px;
+        font-family: verdana;
+      }
+      /* *********BOTTOM********** */
+      .bottom{ 
+        bottom: 0px;
+        left: 0px;
+        position: fixed;
+        background: #E0DEDE;
+        width: 100%;
+        height: 95px;
+      }
+      .inputs{ 
+        width: 96%;
+        float: left;
+      }
+      .password{
+        width: 100%;
+        height: 30px;
+        background: #E0DEDE;
+        margin: none;
+        border: none;
+        font-size: 30px;
+        font-family: verdana;
+        margin: 2px 1% 2px;
+      }
+      .message_entry{
+        width: 100%;
+        height: 50px;
+        background: #E0DEDE;
+        margin: none;
+        border: none;
+        border-top: 3px solid #6a197d;
+        font-size: 22px;
+        font-family: verdana;
+      }    
+      .content_counter{
+        position: fixed;
+        text-align: right;
+        float: right;
+        bottom: 0.4%;
+        right: 100px;
+        z-index: 200;
+        color: #757575;
+      }
+      /* *********MSG_LIST********** */
+      .message_list{
+        width: 99%;
+        margin-top:  60px;
+        margin-bottom: 100px;
+      }
+      .message{
+        border-radius: 12px;
+        background: #e2cee7;
+        margin-bottom:  15px;
+        margin-left:  10px;
+        margin-right:  10px;
+      }
+      .username{
+        margin-left:  10px;
+        border-bottom: 1px solid #6a197d;
+        font-size: 14px;
+        font-family: verdana;
+      }
+      .time{
+        margin-left:  6px;
+        font-size: 10px;
+        font-family: verdana;
+      }
+      .content{
+        margin-left:  7px;
+        font-size: 17px;
+        font-family: verdana;
+        overflow-wrap: break-word;
+      }
+      /* *********BUTTONS********** */
+      #send_button {
+        float: right;
+        position: absolute;
+        z-index: 100;
+        top: 10px;
+        right: 10px;
+
+        width: 45px;
+        height: 45px;
+        padding: 16px;
+        border-radius: 45%;
+
+        background: #6a197d;
+      }
+      #triangle_top {
+        position: absolute;
+        /* position */
+        top: 12px;
+        left: 16px;
+        /* size */
+        border-bottom: 25px solid white;
+        border-right: 55px solid transparent;
+      }
+      #triangle_bot {
+        position: absolute;
+        /* position */
+        top: 39px;
+        left: 16px;
+        /* size */
+        border-top: 25px solid white;
+        border-right: 55px solid transparent;
+      }
+      #join_stop_button {
+        float: right;
+        position: fixed;
+        z-index: 100;
+        top: 4px;
+        right: 10px;
+
+        width: 33px;
+        height: 33px;
+        padding: 6px;
+
+        border-radius: 40%;
+        background: #6a197d;
+      }
+      #join_triangle_top {
+        position: absolute;
+        /* position */
+        top: 9px;
+        left: 12px;
+        /* size */
+        border-bottom: 13px solid white;
+        border-right: 25px solid transparent;
+      }
+      #join_triangle_bot {
+        position: absolute;
+        /* position */
+        top: 22px;
+        left: 12px;
+        /* size */
+        border-top: 13px solid white;
+        border-right: 25px solid transparent;
+      }
+      #stop_square {
+        position: absolute;
+        /* position */
+        top: 12px;
+        left: 12px;
+        /* size */
+        border-top: 21px solid white;
+        border-right: 21px solid white;
+      }
+
+    </style>
   </head>
 
   <body height="100%" width=100% class="everything">
     <div id="title_div">
       <input type="text" class="title" id="title" placeholder="Title" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
       <div id="join_stop_button">
-        <div id="join_triangle_top"></div>
-        <div id="join_triangle_bot"></div>
+        <div id="stop_square"></div>
       </div>
     </div>
     

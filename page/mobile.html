@@ -1,198 +1,163 @@
 <!DOCTYPE html>
 <html lang="">
   <head>
-  <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
-  <meta content="utf-8" http-equiv="encoding">
-  <meta name="viewport" content="user-scalable=no">
-
-  <script src="jspack.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha3/0.8.0/sha3.min.js" integrity="sha512-PmGDkK2UHGzTUfkFGcJ8YSrD/swUXekcca+1wWlrwALIZho9JX+3ddaaI9wmmf8PmgDIpMtx6TU8YBJAZS0mPQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/aes-js/4.0.0-beta.2/index.min.js" integrity="sha512-H9KqUQpRsqGUaA2pm2FkHZX4wFhgDwE70o2PUS0Cx7V1PJjBh2J5YZnSaI/u0m9zv/Cx3qvMI48/OZz7/o47xQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script type="text/javascript" src="client.js"></script>
-  <script type="text/javascript">window.onload = main;</script>
-
-  <style>
-    body {
-      background: #f5f5f5
-    }
-    .everything{
-      width: 100%;
-      height: 100%;
-    }
-    /* *********TOP********** */
-    .title {
-      position: fixed;
-      top: 0px;
-      left: 0px;
-      width: 100%;
-      height: 5%;
-      background: #E0DEDE;
-      border: none;
-      border-bottom: 3px solid #6a197d;
-      font-size: 75px;
-      font-family: verdana;
-    }
-    /* *********BOTTOM********** */
-    .bottom { 
-      bottom: 0px;
-      left: 0px;
-      position: fixed;
-      background: #E0DEDE;
-      width: 100%;
-      height: 10%;
-    }
-    .inputs { 
-      width: 96%;
-      float: left;
-    }
-    .password {
-      width: 100%;
-      height: 50px;
-      background: #E0DEDE;
-      margin: none;
-      border: none;
-      font-size: 30px;
-      font-family: verdana;
-      margin: 2px 1% 2px;
-    }
-    .message_entry {
-      width: 100%;
-      height: 100%;
-      background: #E0DEDE;
-      margin: none;
-      border: none;
-      border-top: 3px solid #6a197d;
-      font-size: 40px;
-      font-family: verdana;
-    }
-    .content_counter {
-      position: fixed;
-      text-align: right;
-      float: right;
-      bottom: -1%;
-      right: 5%;
-      z-index: 200;
-      font-size: 30px;
-      color: #757575;
-    }
-    /* *********MSG_LIST********** */
-    .message_list {
-      width: 99%;
-      margin-top: 12%;
-      margin-bottom: 15%;
-    }
-    .message {
-      border-radius: 12px;
-      background: #e2cee7;
-      margin-bottom:  15px;
-      margin-left:  10px;
-      margin-right:  10px;
-    }
-    .username {
-      margin-left:  10px;
-      border-bottom: 1px solid #6a197d;
-      font-size: 12px;
-      font-family: verdana;
-    }
-    .time {
-      margin-left:  6px;
-      font-size: 10px;
-      font-family: verdana;
-    }
-    .content {
-      margin-left:  7px;
-      font-size: 14px;
-      font-family: verdana;
-      overflow-wrap: break-word;
-    }
-    /* *********BUTTONS********** */
-    #send_button {
-      float: right;
-      position: absolute;
-      z-index: 100;
-      top: 10px;
-      right: 10px;
-
-      width: 45px;
-      height: 45px;
-      padding: 16px;
-      border-radius: 45%;
-
-      background: #6a197d;
-    }
-    #triangle_top {
-      position: absolute;
-      /* position */
-      top: 12px;
-      left: 16px;
-      /* size */
-      border-bottom: 25px solid white;
-      border-right: 55px solid transparent;
-    }
-    #triangle_bot {
-      position: absolute;
-      /* position */
-      top: 39px;
-      left: 16px;
-      /* size */
-      border-top: 25px solid white;
-      border-right: 55px solid transparent;
-    }
-    #join_stop_button {
-      float: right;
-      position: fixed;
-      z-index: 100;
-      top: 0.5%;
-      right: 0.5%;
-
-      width: 4%;
-      height: 3%;
-      padding: 1%;
-
-      border-radius: 40%;
-      background: #6a197d;
-    }
-    #join_triangle_top {
-      position: absolute;
-      /* position */
-      top: 20%;
-      left: 20%;
-      /* size */
-      border-bottom: 24px solid white;
-      border-right: 40px solid transparent;
-    }
-    #join_triangle_bot {
-      position: absolute;
-      /* position */
-      top: 53%;
-      left: 20%;
-      /* size */
-      border-top: 24px solid white;
-      border-right: 40px solid transparent;
-    }
-    #stop_square {
-      position: absolute;
-      /* position */
-      top: 25%;
-      left: 18%;
-      /* size */
-      border-top: 37px solid white;
-      border-right: 37px solid white;
-    }
-
-  </style>
     <title>Publichat</title>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+    <meta content="utf-8" http-equiv="encoding">
+    <meta name="viewport" content="user-scalable=no">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha3/0.8.0/sha3.min.js" integrity="sha512-PmGDkK2UHGzTUfkFGcJ8YSrD/swUXekcca+1wWlrwALIZho9JX+3ddaaI9wmmf8PmgDIpMtx6TU8YBJAZS0mPQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aes-js/4.0.0-beta.2/index.min.js" integrity="sha512-H9KqUQpRsqGUaA2pm2FkHZX4wFhgDwE70o2PUS0Cx7V1PJjBh2J5YZnSaI/u0m9zv/Cx3qvMI48/OZz7/o47xQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script type="text/javascript" src="client.js"></script>
+    <script type="text/javascript">window.onload = main;</script>
+
+    <style>
+      body {
+        background: #f5f5f5
+      }
+      .everything{
+        width: 100%;
+        height: 100%;
+      }
+      .inputs { 
+        width: 100%;
+        height: 100%;
+        float: left;
+        background: #E0DEDE;
+      }
+      /* *********TOP********** */
+      .top {
+        top: 0px;
+        left: 0px;
+        position: fixed;
+        margin:0;
+        padding:0;
+      }
+      .title {
+        left: 0px;
+        width: 100%;
+        height: 90px;
+        border: none;
+        background: #E0DEDE;
+        border-bottom: 3px solid #6a197d;
+        font-size: 70px;
+        font-family: verdana;
+      }
+      .password {
+        width: 100%;
+        height: 60px;
+        left: 0px;
+        border: none;
+        background: #E0DEDE;
+        border-bottom: 5px solid #6a197d;
+        font-size: 35px;
+        font-family: verdana;
+      }
+      /* *********BOTTOM********** */
+      .bottom { 
+        bottom: 0px;
+        left: 0px;
+        position: fixed;
+        width: 100%;
+        height: 160px;
+        border-top: 7px solid #6a197d;
+      }
+      .message_entry {
+        width: 90%;
+        height: 160px;
+        background: #E0DEDE;
+        margin: none;
+        border: none;
+        font-size: 50px;
+        font-family: verdana;
+      }
+      .content_counter {
+        position: fixed;
+        text-align: center;
+        float: center;
+        bottom: -10px;
+        right: 15px;
+        z-index: 200;
+        font-size: 30px;
+        color: #757575;
+      }
+      /* *********MSG_LIST********** */
+      .message_list {
+        z-index: -1;
+        width: 99%;
+        margin: 220px auto 163px;
+      }
+      .message {
+        border-radius: 12px;
+        background: #e2cee7;
+        margin-bottom: 15px;
+        margin-left: 10px;
+        margin-right: 10px;
+      }
+      .username {
+        margin-left: 10px;
+        border-bottom: 1px solid #6a197d;
+        font-size: 12px;
+        font-family: verdana;
+      }
+      .time {
+        margin-left:  6px;
+        font-size: 10px;
+        font-family: verdana;
+      }
+      .content {
+        margin-left:  7px;
+        font-size: 14px;
+        font-family: verdana;
+        overflow-wrap: break-word;
+      }
+      /* *********BUTTONS********** */
+      #send_button {
+        float: right;
+        position: absolute;
+        z-index: 100;
+        top: 10px;
+        right: 10px;
+
+        width: 45px;
+        height: 45px;
+        padding: 16px;
+        border-radius: 45%;
+
+        background: #6a197d;
+      }
+      #triangle_top {
+        position: absolute;
+        /* position */
+        top: 12px;
+        left: 16px;
+        /* size */
+        border-bottom: 25px solid white;
+        border-right: 55px solid transparent;
+      }
+      #triangle_bot {
+        position: absolute;
+        /* position */
+        top: 39px;
+        left: 16px;
+        /* size */
+        border-top: 25px solid white;
+        border-right: 55px solid transparent;
+      }
+    </style>
   </head>
 
   <body height="100%" width=100% class="everything">
-    <div id="title_div">
-      <input type="text" class="title" id="title" placeholder="Title" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-      <div id="join_stop_button">
-        <div id="join_triangle_top"></div>
-        <div id="join_triangle_bot"></div>
+    <div class="top">
+      <div class="inputs">
+        <input type="text" class="title" id="title" placeholder="Title" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <input type="text" class="password" id="password" placeholder="Secret Username" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+          <div id="join_stop_button">
+          <div id="join_triangle_top"></div>
+          <div id="join_triangle_bot"></div>
+        </div>
       </div>
     </div>
-    
     <div class="message_list" id="message_list" style="overflow-y: scroll;">
       <div class="message">
         <div class="username">Admin</div>
@@ -215,10 +180,8 @@
 
     <div class="bottom">
       <div class="inputs">
-        <input type="text" class="password" id="password" placeholder="Secret Identifier" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
         <textarea type="text" class="message_entry" id="message_entry" placeholder="Write message here..." maxlength="127"></textarea>
-        <p class="content_counter" id="content_counter">0/127</p>
-        
+        <p class="content_counter" id="content_counter"></p>
       </div>
       <div id="send_button">
         <div id="triangle_top"></div>

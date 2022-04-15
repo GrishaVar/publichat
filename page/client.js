@@ -1,6 +1,6 @@
 main = function() {
   document.getElementById('send_button').onclick = function() {send_message()};
-  document.getElementById('join_stop_button').onclick = function() {toggle_loop(); mainloop("");};
+  document.getElementById('join_stop_button').onclick = function() {toggle_loop();};
   var ws_ip_port = 'ws://' + location.host + "/ws";
   const socket = new WebSocket(ws_ip_port);
   socket.onopen = function() {console.log("socket opened");};
@@ -73,7 +73,7 @@ main = function() {
   // *********************************SHUTDOWN*********************************
   function shutdown(e) {
     loop=false;
-    console.log('ws error!'+e.code+e.reason);
+    console.log('ws error! '+e.code+e.reason);
     document.getElementById('join_stop_button').style.backgroundColor = "#ef0000";
     document.getElementById('send_button').style.backgroundColor = "#ef0000";
   }
@@ -154,7 +154,7 @@ main = function() {
   // *********************************MAINLOOP*********************************
   function mainloop(old_title) {
     var title = get_title();
-    if (title == "") {
+    if (title == "" || loop == false) {
       setTimeout(function() {mainloop(title);}, 1000);
       return;
     }
@@ -170,6 +170,7 @@ main = function() {
     }
     setTimeout(function() {mainloop(title);}, 500);
   };
+
   // *********************************BUTTONS*********************************
   function draw_on() {
     var stop_square = document.createElement("div");
@@ -183,7 +184,7 @@ main = function() {
     join_triangle_top.id = "join_triangle_top";
     document.getElementById('join_stop_button').replaceChildren(join_triangle_top, join_triangle_bot);
   };
-  var loop = false;
+  var loop = true;
   function toggle_loop() {
     if (loop) {
       loop = false;
@@ -193,6 +194,7 @@ main = function() {
       draw_on();
     }
   };
+  
   // *********************************QUERY/FETCH*********************************
   function fetch_messages(title) {
     var chat_key = sha3_256.array(title);
