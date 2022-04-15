@@ -23,7 +23,7 @@ fn handle_ws(req: &str, mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
     let key_in = match req.split("Sec-WebSocket-Key: ").nth(1) {
         Some(val) => &val[..24],
         _ => {
-            send_code(&mut stream, 400)?;
+            send_code(400, &mut stream)?;
             return Err("Couldn't find WS key");
         },
     };
@@ -58,7 +58,7 @@ fn handle_ws(req: &str, mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
     smrt::handle(&mut stream, globals)
 }
 
-fn send_code(stream: &mut TcpStream, code: u16) -> Res {
+fn send_code(code: u16, stream: &mut TcpStream) -> Res {
     full_write(
         stream,
         format!("HTTP/1.1 {}\r\n\r\n", code).as_bytes(),
@@ -88,7 +88,7 @@ fn handle_version(stream: &mut TcpStream) -> Res {
         HTTP/1.1 200\r\n\
         Content-Length: 40\r\n\r\n\
         1234567890123456789012345678901234567890";  // these are 40 charachters
-    let mut data = HEADER.clone();
+    let mut data = *HEADER;
     data[HEADER.len()-40..].copy_from_slice(&hash[..40]);
 
     full_write(stream, &data, "Failed to send commit hash")
@@ -102,7 +102,7 @@ pub fn handle(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
 
     if !req.ends_with("\0\0\0\0\0\0\0\0") {
         // Received HTTP packet was (probably) bigger than 1 KiB
-        send_code(&mut stream, 413)?;
+        send_code(413, &mut stream)?;
         return Err("Received very large HTTP packet; aborted.")
     }
 
@@ -119,6 +119,6 @@ pub fn handle(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
         "/ws"            => handle_ws(req, stream, globals),  // start WS
         "/robots.txt"    => handle_robots(&mut stream),
         "/version"       => handle_version(&mut stream),
-        _                => send_code(&mut stream, 404),  // reject everything else
+        _                => send_code(404, &mut stream),  // reject everything else
     }
 }

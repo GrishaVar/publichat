@@ -164,7 +164,7 @@ impl Read for WsStream {
         // There's something in the queue - move it to the buffer
         let len = self.data.len().min(dest_buf.len());  // how many bytes can be filled in
         dest_buf[..len].fill_with(|| self.data.pop_front().unwrap());  // can't fail
-        return Ok(len);
+        Ok(len)
     }
 }
 
