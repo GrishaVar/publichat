@@ -83,7 +83,6 @@ fn main() {
             index_html:  file_getter("page/index.html"),
             mobile_html: file_getter("page/mobile.html"),
             client_js:   file_getter("page/client.js"),
-            jspack_js:   file_getter("page/jspack.js"),
             favicon_ico: file_getter("page/favicon.ico"),
         })
     };

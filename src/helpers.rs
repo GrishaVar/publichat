@@ -23,6 +23,5 @@ pub struct Globals {  // owns all its data!
     pub index_html:  Vec<u8>,
     pub mobile_html: Vec<u8>,
     pub client_js:   Vec<u8>,
-    pub jspack_js:   Vec<u8>,
     pub favicon_ico: Vec<u8>,
 }

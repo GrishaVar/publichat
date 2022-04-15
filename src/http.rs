@@ -114,7 +114,6 @@ pub fn handle(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
     match path {
         "/" | ""         => send_data(200, &globals.index_html, &mut stream),
         "/favicon.ico"   => send_data(200, &globals.favicon_ico, &mut stream),
-        "/jspack.js"     => send_data(200, &globals.jspack_js, &mut stream),  // todo: remove
         "/client.js"     => send_data(200, &globals.client_js, &mut stream),
         "/mobile" | "/m" => send_data(200, &globals.mobile_html, &mut stream),
         "/ws"            => handle_ws(req, stream, globals),  // start WS
