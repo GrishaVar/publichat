@@ -84,6 +84,7 @@ fn main() {
             mobile_html: file_getter("page/mobile.html"),
             client_js:   file_getter("page/client.js"),
             favicon_ico: file_getter("page/favicon.ico"),
+            four0four:   file_getter("page/404.html"),
         })
     };
 

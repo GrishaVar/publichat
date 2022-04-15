@@ -67,11 +67,12 @@ fn send_code(code: u16, stream: &mut TcpStream) -> Res {
 }
 
 fn handle_robots(stream: &mut TcpStream) -> Res {
-    full_write(
-        stream,
-        b"HTTP/1.1 200\r\nContent-Length: 25\r\n\r\nUser-agent: *\nDisallow: /",
-        "Failed to send robots",
-    )
+    const RESP_ROBOTS: &[u8] = b"\
+        HTTP/1.1 200\r\n\
+        Content-Length: 25\r\n\r\n\
+        User-agent: *\nDisallow: /
+    ";
+    full_write(stream, RESP_ROBOTS, "Failed to send robots")
 }
 
 fn handle_version(stream: &mut TcpStream) -> Res {
@@ -119,6 +120,6 @@ pub fn handle(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
         "/ws"            => handle_ws(req, stream, globals),  // start WS
         "/robots.txt"    => handle_robots(&mut stream),
         "/version"       => handle_version(&mut stream),
-        _                => send_code(404, &mut stream),  // reject everything else
+        _                => send_data(404, &globals.four0four, &mut stream),
     }
 }
