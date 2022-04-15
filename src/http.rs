@@ -23,7 +23,7 @@ fn handle_file(file: &str, stream: &mut TcpStream) -> Res {
     )
 }
 
-fn handle_ws(req: String, mut stream: TcpStream, data_dir: &Arc<Path>) -> Res {
+fn handle_ws(req: &str, mut stream: TcpStream, data_dir: &Arc<Path>) -> Res {
     // handshake
     let key_in = match req.split("Sec-WebSocket-Key: ").nth(1) {
         Some(val) => &val[..24],
@@ -55,7 +55,6 @@ fn handle_ws(req: String, mut stream: TcpStream, data_dir: &Arc<Path>) -> Res {
     )?;
 
     // drop heap stuff not needed for smrt::handle
-    drop(req);  // this is why req is passed directly
     drop(hasher);
     drop(key_out);
 
@@ -103,9 +102,14 @@ fn handle_version(stream: &mut TcpStream) -> Res {
 pub fn handle(mut stream: TcpStream, data_dir: &Arc<Path>) -> Res {
     // Handles GET requests (where first four bytes "GET " already consumed)
     let mut buf = [0; 1024];  // todo: think more about sizes
-    if stream.read(&mut buf).is_err() { return Err("Failed to read HTTP packet") }
-    let req = String::from_utf8_lossy(&buf).to_string();
-    // assert!(req.ends_with("\r\n\r\n"));  // todo: fill more if this crashes
+    stream.read(&mut buf).map_err(|_| "Failed to read HTTP packet")?;
+    let req = std::str::from_utf8(&buf).map_err(|_| "Recieved non-utf8 HTTP")?;
+
+    if !req.ends_with("\0\0\0\0\0\0\0\0") {
+        // Received HTTP packet was (probably) bigger than 1 KiB
+        handle_http_code(&mut stream, 413)?;
+        return Err("Received very large HTTP packet; aborted.")
+    }
 
     let path = match req.split(' ').next() {
         Some(p) => p,
