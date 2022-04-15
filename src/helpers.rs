@@ -1,4 +1,5 @@
 use std::io::{Write, Read};
+use std::path::PathBuf;
 
 pub type Res = Result<(), &'static str>;
 
@@ -15,4 +16,13 @@ pub fn read_exact(stream: &mut impl Read, buf: &mut [u8], err: &'static str) -> 
         Ok(_) => Ok(()),
         Err(_) => Err(err),
     }
+}
+
+pub struct Globals {  // owns all its data!
+    pub data_dir:    PathBuf,
+    pub index_html:  Vec<u8>,
+    pub mobile_html: Vec<u8>,
+    pub client_js:   Vec<u8>,
+    pub jspack_js:   Vec<u8>,
+    pub favicon_ico: Vec<u8>,
 }

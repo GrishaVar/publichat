@@ -1,6 +1,6 @@
 use std::{sync::Arc, io::{Read, Write}, path::Path};
 
-use crate::{constants::*, db, msg, helpers::{Res, read_exact, full_write}};
+use crate::{constants::*, db, msg, helpers::*};
 
 fn query_bytes_to_args(data: &[u8; 4]) -> (u32, u8, bool) {
     let forward = data[0] & 0x80 != 0;  // check first bit
@@ -38,7 +38,7 @@ fn send_messages(stream: &mut (impl Read + Write), msgs: &[MessageSt], first_id:
     )
 }
 
-pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) -> Res {
+pub fn handle(mut stream: (impl Read + Write), globals: &Arc<Globals>) -> Res {
     let mut pad_buf = [0; PADDING_SIZE];
     let mut snd_buf = [0; MSG_IN_SIZE];  // size of msg packet
     let mut chat_id_buf = [0; CHAT_ID_SIZE];
@@ -58,7 +58,7 @@ pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) -> Res {
                 if pad_buf != END_PADDING { return Err("Incorrect end padding (snd)") }
  
                 chat_id_buf = msg::packet_to_storage(&snd_buf, &mut st_buf);
-                db::push(&get_chat_file(&chat_id_buf, data_dir), &st_buf)?;
+                db::push(&get_chat_file(&chat_id_buf, &globals.data_dir), &st_buf)?;
             },
             FETCH_PADDING => {
                 // fill fetch buffer
@@ -67,7 +67,7 @@ pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) -> Res {
                 if pad_buf != END_PADDING { return Err("Incorrect end padding (fch)") }
 
                 // get arguments for the db fetch
-                let path = get_chat_file(&chat_id_buf, data_dir);
+                let path = get_chat_file(&chat_id_buf, &globals.data_dir);
                 // todo: add count to fetch message
 
                 // fetch from db & send to client
@@ -83,7 +83,7 @@ pub fn handle(mut stream: (impl Read + Write), data_dir: &Arc<Path>) -> Res {
                 
                 // get arguments for the db fetch
                 let (msg_id, count, forward) = query_bytes_to_args(&qry_arg_buf);
-                let path = get_chat_file(&chat_id_buf, data_dir);
+                let path = get_chat_file(&chat_id_buf, &globals.data_dir);
 
                 // return query
                 let (id, messages) = db::query(&path, msg_id, count, forward)?;

@@ -1,34 +1,29 @@
-use std::{net::TcpStream, sync::Arc, path::Path, fs, io::Read};
+use std::{net::TcpStream, sync::Arc, io::Read};
 use sha1_smol::Sha1;
 use crate::smrt;
 use crate::ws::WsStream;
-use crate::helpers::{Res, full_write};
+use crate::helpers::{Res, full_write, Globals};
 
-fn handle_file(file: &str, stream: &mut TcpStream) -> Res {
-    // BE CAREFUL WITH THIS ONE!
-    let body = match fs::read(file) {
-        Ok(f) => f,
-        _ => return handle_http_code(stream, 404),
-    };
-    
+fn send_data(code: u16, data: &[u8], stream: &mut TcpStream) -> Res {
     let header_string = format!(
-        "HTTP/1.1 200\r\nContent-Length: {}\r\n\r\n",
-        body.len()
+        "HTTP/1.1 {}\r\nContent-Length: {}\r\n\r\n",
+        code,
+        data.len(),
     );
 
     full_write(
         stream,
-        &[header_string.as_bytes(), &body].concat(),
-        "Failed to send/read file ",
+        &[header_string.as_bytes(), data].concat(),
+        "Failed to send file",
     )
 }
 
-fn handle_ws(req: &str, mut stream: TcpStream, data_dir: &Arc<Path>) -> Res {
+fn handle_ws(req: &str, mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
     // handshake
     let key_in = match req.split("Sec-WebSocket-Key: ").nth(1) {
         Some(val) => &val[..24],
         _ => {
-            handle_http_code(&mut stream, 400)?;
+            send_code(&mut stream, 400)?;
             return Err("Couldn't find WS key");
         },
     };
@@ -60,10 +55,10 @@ fn handle_ws(req: &str, mut stream: TcpStream, data_dir: &Arc<Path>) -> Res {
 
     // launch SMRT
     let mut stream = WsStream::new(stream);
-    smrt::handle(&mut stream, data_dir)
+    smrt::handle(&mut stream, globals)
 }
 
-fn handle_http_code(stream: &mut TcpStream, code: u16) -> Res {
+fn send_code(stream: &mut TcpStream, code: u16) -> Res {
     full_write(
         stream,
         format!("HTTP/1.1 {}\r\n\r\n", code).as_bytes(),
@@ -99,7 +94,7 @@ fn handle_version(stream: &mut TcpStream) -> Res {
     full_write(stream, &data, "Failed to send commit hash")
 }
 
-pub fn handle(mut stream: TcpStream, data_dir: &Arc<Path>) -> Res {
+pub fn handle(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
     // Handles GET requests (where first four bytes "GET " already consumed)
     let mut buf = [0; 1024];  // todo: think more about sizes
     stream.read(&mut buf).map_err(|_| "Failed to read HTTP packet")?;
@@ -107,7 +102,7 @@ pub fn handle(mut stream: TcpStream, data_dir: &Arc<Path>) -> Res {
 
     if !req.ends_with("\0\0\0\0\0\0\0\0") {
         // Received HTTP packet was (probably) bigger than 1 KiB
-        handle_http_code(&mut stream, 413)?;
+        send_code(&mut stream, 413)?;
         return Err("Received very large HTTP packet; aborted.")
     }
 
@@ -117,14 +112,14 @@ pub fn handle(mut stream: TcpStream, data_dir: &Arc<Path>) -> Res {
     };
 
     match path {
-        "/" | ""        => handle_file("page/index.html", &mut stream),
-        "/favicon.ico"  => handle_file("page/favicon.ico", &mut stream),
-        "/jspack.js"    => handle_file("page/jspack.js", &mut stream),  // todo: remove
-        "/client.js"    => handle_file("page/client.js", &mut stream),
-        "/mobile" | "/m"=> handle_file("page/mobile.html", &mut stream),
-        "/ws"           => handle_ws(req, stream, data_dir),  // start WS
-        "/robots.txt"   => handle_robots(&mut stream),
-        "/version"      => handle_version(&mut stream),
-        _               => handle_http_code(&mut stream, 404),  // reject everything else
+        "/" | ""         => send_data(200, &globals.index_html, &mut stream),
+        "/favicon.ico"   => send_data(200, &globals.favicon_ico, &mut stream),
+        "/jspack.js"     => send_data(200, &globals.jspack_js, &mut stream),  // todo: remove
+        "/client.js"     => send_data(200, &globals.client_js, &mut stream),
+        "/mobile" | "/m" => send_data(200, &globals.mobile_html, &mut stream),
+        "/ws"            => handle_ws(req, stream, globals),  // start WS
+        "/robots.txt"    => handle_robots(&mut stream),
+        "/version"       => handle_version(&mut stream),
+        _                => send_code(&mut stream, 404),  // reject everything else
     }
 }
