@@ -1,7 +1,7 @@
 main = function() {
   document.getElementById('send_button').onclick = function() {send_message()};
   document.getElementById('join_stop_button').onclick = function() {toggle_loop();};
-  var ws_ip_port = 'wss://' + location.host + "/ws";
+  var ws_ip_port = 'ws://' + location.host + "/ws";
   const socket = new WebSocket(ws_ip_port);
   socket.onopen = function() {console.log("socket opened");};
   socket.onerror = function(e) {shutdown(e)};
@@ -54,20 +54,20 @@ main = function() {
 
   // *******************************CHAR_COUNTER*******************************
   var content_div = document.getElementById("message_entry");
-  var counter_div = document.getElementById("content_counter");
+  //var counter_div = document.getElementById("content_counter");
   content_div.addEventListener("keyup",keystroke_input);
   function keystroke_input(event) {
     // send with enter (enter == 13)
     if(event.keyCode === 13) {send_message();}
     // update colour and value of message length counter
     var textLength = content_div.value.length;
-    counter_div.textContent = textLength + "/" + (message_concent_lenght-1);
+    //counter_div.textContent = textLength + "/" + (message_concent_lenght-1);
     if(textLength >= message_concent_lenght-1){
       content_div.style.borderColor = "#ff2851";
-      counter_div.style.color = "#ff2851";
+      //counter_div.style.color = "#ff2851";
     } else{
       content_div.style.borderColor = "#6a197d";
-      counter_div.style.color = "#757575";
+      //counter_div.style.color = "#757575";
     }
   };
   // *********************************SHUTDOWN*********************************
@@ -213,7 +213,7 @@ main = function() {
     var outbound_bytes = message_to_bytes();
     if (outbound_bytes == null) {return;}
     document.getElementById('message_entry').value = "";
-    counter_div.textContent = "0/" + message_concent_lenght;
+    // counter_div.textContent = "0/" + message_concent_lenght;
     ws_send(outbound_bytes);
     
   };
