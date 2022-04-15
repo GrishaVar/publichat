@@ -80,6 +80,26 @@ fn handle_robots(stream: &mut TcpStream) -> Res {
     )
 }
 
+fn handle_version(stream: &mut TcpStream) -> Res {
+    let output = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .output()  // TODO: consider using reader to avoid Vec allocation?
+        .map_err(|_| "Failed to exec git command")?;
+
+    let hash = output.stdout;  // has a \n at the end!
+    if hash.len() != 41 { return Err("Retrieved hash not 40 charachters") }
+
+    // this next part is pretty sinful, but avoids allocations (hash len = 40)
+    const HEADER: &[u8; 76] = b"\
+        HTTP/1.1 200\r\n\
+        Content-Length: 40\r\n\r\n\
+        1234567890123456789012345678901234567890";  // these are 40 charachters
+    let mut data = HEADER.clone();
+    data[HEADER.len()-40..].copy_from_slice(&hash[..40]);
+
+    full_write(stream, &data, "Failed to send commit hash")
+}
+
 pub fn handle(mut stream: TcpStream, data_dir: &Arc<Path>) -> Res {
     // Handles GET requests (where first four bytes "GET " already consumed)
     let mut buf = [0; 1024];  // todo: think more about sizes
@@ -100,6 +120,7 @@ pub fn handle(mut stream: TcpStream, data_dir: &Arc<Path>) -> Res {
         "/mobile" | "/m"=> handle_file("page/mobile.html", &mut stream),
         "/ws"           => handle_ws(req, stream, data_dir),  // start WS
         "/robots.txt"   => handle_robots(&mut stream),
+        "/version"      => handle_version(&mut stream),
         _               => handle_http_code(&mut stream, 404),  // reject everything else
     }
 }
