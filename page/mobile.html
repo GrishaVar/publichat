@@ -4,13 +4,14 @@
     <title>Publichat</title>
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
     <meta content="utf-8" http-equiv="encoding">
-    <meta name="viewport" content="user-scalable=no">
+    <meta name='viewport' content='width=device-width, height=device-height initial-scale=0.5, user-scalable=0'/>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha3/0.8.0/sha3.min.js" integrity="sha512-PmGDkK2UHGzTUfkFGcJ8YSrD/swUXekcca+1wWlrwALIZho9JX+3ddaaI9wmmf8PmgDIpMtx6TU8YBJAZS0mPQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/aes-js/4.0.0-beta.2/index.min.js" integrity="sha512-H9KqUQpRsqGUaA2pm2FkHZX4wFhgDwE70o2PUS0Cx7V1PJjBh2J5YZnSaI/u0m9zv/Cx3qvMI48/OZz7/o47xQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script type="text/javascript" src="client.js"></script>
     <script type="text/javascript">
       window.onload = main;
+      window.scrollTo(0,1);
     </script>
 
     <style>
@@ -23,6 +24,7 @@
       }
       body {
         height: 100%;
+        min-height: -webkit-fill-available;  /* MAGIC! */
         margin: 0;
         display: flex;
         flex-direction: column;
