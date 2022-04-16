@@ -11,6 +11,13 @@
     <script type="text/javascript">window.onload = main;</script>
 
     <style>
+      :root { 
+        --bg1: #f5f5f5;
+        --bg2: #E0DEDE;
+        --bg3: #efd4dc;
+        --borders1: #603;
+        --borders2: #603;
+      }
       body {
         height: 100vh;
         margin: 0;
@@ -21,16 +28,15 @@
       /* ********** TOP ********** */
       .top {
         flex-grow: 1;
-        background-color: rgb(255, 0, 0);
+        background-color: var(--bg2);
         height: 50px;
-        border-bottom: 5px solid #e7ff71;
         
         display: flex;
         flex-direction: row;
       }
       .socket_button_div {
         flex-grow: 1;
-        background-color: cyan;
+        background-color: var(--bg2);
         max-width: 15px;
         padding-left: 5px;
         padding-right: 2px;
@@ -51,7 +57,7 @@
       .title {
         flex-grow: 1;
         display: block;
-        background-color: rgb(0, 255, 255);
+        background-color: var(--bg2);
         font-size: 30pt;
         font-family: verdana;
         border: 0px;
@@ -62,15 +68,17 @@
       /* ********** MESSAGE_LIST ********** */
       .message_list {
         flex-grow: 1;
-        background-color: grey;
+        background-color: var(--bg1);
+        border-bottom: 4px solid var(--borders1);
+        border-top: 4px solid var(--borders1);
         height: 80vh;
       }
       .message {
-        background: #e2cee7;
+        background: var(--bg3);
         width: fit-content;
         max-width: 96%;  /* TODO: magic number doesn't even work*/
         margin: 10px;
-        border: 2px solid #9a8c9e;
+        border: 1px solid var(--borders2);
         border-radius: 12px;
         padding: 5px;
         
@@ -81,6 +89,9 @@
         flex-grow: 1;
         font-size: 13pt;
         font-family: verdana;
+        width: min-content;
+        border-radius: 5px;
+        border-bottom: 2px solid var(--borders1);
       }
       .date {
         flex-grow: 1;
@@ -98,7 +109,7 @@
       /* ********** BOTTOM ********** */
       .bottom {
         flex-grow: 1;
-        background-color: rgb(0, 0, 255);
+        background-color: var(--bg2);
         height: 10vh;
         min-height: 50px;
         margin: 0;
@@ -109,9 +120,9 @@
       .secret_identifer {
         flex-grow: 1;
         min-height: 40px;
-        background-color: cadetblue;
+        background-color: var(--bg2);
         border: 0px;
-        border-top: 5px solid #2a148d;
+        border-bottom: 2px solid var(--borders1);
         font-size: 20pt;
         font-family: verdana;
         outline: none;
@@ -121,13 +132,13 @@
       .sending_div {
         flex-grow: 1;
         min-height: 60px;
-        border-top: 1px solid #000f71;
+        border-top: 1px solid var(--bg2);
         display: flex;
         flex-direction: row;
       }
       .message_entry {
         flex-grow: 1;
-        background-color: rgb(0, 255, 255);
+        background-color: var(--bg2);
         border: 0px;
         font-size: 30pt;
         font-family: verdana;
@@ -137,7 +148,7 @@
       }
       .send_button_div {
         flex-grow: 1;
-        background-color: cyan;
+        background-color: var(--bg2);
         justify-content: center;
         align-items: center; 
         flex-grow: 1;
@@ -148,7 +159,7 @@
         display: flex;
       }
       .send_button {
-        background-color: orangered;
+        background-color: var(--borders1);
         height: 50px;
         width: 50px;
         border-radius: 50%;
@@ -160,12 +171,12 @@
       }
       #triangle_top {
         flex-grow: 1;
-        border-bottom: 15px solid rgb(51, 101, 177);
+        border-bottom: 15px solid var(--bg1);
         border-right: 30px solid transparent;
       }
       #triangle_bot {
         flex-grow: 1;
-        border-top: 15px solid rgb(51, 101, 177);
+        border-top: 15px solid var(--bg1);
         border-right: 30px solid transparent;
       }
     </style>
