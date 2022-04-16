@@ -42,6 +42,7 @@ impl WsStream {
         let mut res: Vec<u8> = Vec::with_capacity(1 + 1 + 8 + len);
 
         // push starting header
+        #[allow(clippy::unusual_byte_groupings)]  // this is ok
         res.push(0b1_000_0010);  // header (fin=1; op=2(binary))
 
         // push payload length
