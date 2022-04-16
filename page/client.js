@@ -30,7 +30,12 @@ main = function() {
   function get_password(){return document.getElementById('password').value;}
   function get_message(){return document.getElementById('message_entry').value;}
   function clear_messages(){document.getElementById('message_list').replaceChildren();}
-
+  function white_or_black(colour) {
+    var r = parseInt(colour.slice(1,3), 16);
+    var g = parseInt(colour.slice(3,5), 16);
+    var b = parseInt(colour.slice(5,7), 16);
+    return ((r*0.299 + g*0.587 + b*0.114) > 150) ? "#000000" : "#ffffff";
+  }
   var reader = new FileReader();
 
   // *******************************CHAR_COUNTER*******************************
@@ -118,7 +123,12 @@ main = function() {
     }
     // date string
     var date = new Date(Number(time));
-    var date_string = date.toLocaleString('en-GB', { hour12:false } );
+    var today = new Date();
+    if (date.toDateString() === today.toDateString()) {
+      var date_string = date.toLocaleTimeString().slice(0,-3);
+    } else {
+      var date_string = date.toLocaleString().slice(0,-3);
+    }
     // message text
     var title = get_title();
     var chat_key = sha3_256.array(title);
@@ -140,7 +150,9 @@ main = function() {
     time_div.className = 'time';
     content_div.className = 'content';
 
-    usr_div.style.color = "#" + username_string.slice(0,6);
+    var bg_colour = "#" + username_string.slice(0,6);
+    usr_div.style.background = bg_colour;
+    usr_div.style.color = white_or_black(bg_colour);  // selects 'highest' contrast
     usr_div.innerHTML = username_string.slice(6);
     time_div.innerHTML = date_string;
     content_div.innerHTML = message_string;
