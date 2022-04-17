@@ -75,13 +75,18 @@ pub fn handle(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
     };
 
     match path {
-        "/" | ""         => send_data(200, &globals.index_html, &mut stream),
-        "/favicon.ico"   => send_data(200, &globals.favicon_ico, &mut stream),
-        "/client.js"     => send_data(200, &globals.client_js, &mut stream),
-        "/mobile" | "/m" => send_data(200, &globals.mobile_html, &mut stream),
+        "/" | ""         => send_data(200, &globals.index_html, &mut stream)
+                                .map_err(|_| "Failed to send index.html"),
+        "/favicon.ico"   => send_data(200, &globals.favicon_ico, &mut stream)
+                                .map_err(|_| "Failed to send favicon"),
+        "/client.js"     => send_data(200, &globals.client_js, &mut stream)
+                                .map_err(|_| "Failed to send client.js"),
+        "/mobile" | "/m" => send_data(200, &globals.mobile_html, &mut stream)
+                                .map_err(|_| "Failed to send mobile.html"),
         "/ws"            => handle_ws(req, stream, globals),  // start WS
         "/robots.txt"    => handle_robots(&mut stream),
         "/version"       => handle_version(&mut stream, globals),
-        _                => send_data(404, &globals.four0four, &mut stream),
+        _                => send_data(404, &globals.four0four, &mut stream)
+                                .map_err(|_| "Failed to send 404"),
     }
 }
