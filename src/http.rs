@@ -34,24 +34,11 @@ fn handle_robots(stream: &mut TcpStream) -> Res {
     full_write(stream, RESP_ROBOTS, "Failed to send robots")
 }
 
-fn handle_version(stream: &mut TcpStream) -> Res {
-    let output = std::process::Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .output()  // TODO: consider using reader to avoid Vec allocation?
-        .map_err(|_| "Failed to exec git command")?;
-
-    let hash = output.stdout;  // has a \n at the end!
-    if hash.len() != 41 { return Err("Retrieved hash not 40 charachters") }
-
-    // this next part is pretty sinful, but avoids allocations (hash len = 40)
-    const HEADER: &[u8; 76] = b"\
-        HTTP/1.1 200\r\n\
-        Content-Length: 40\r\n\r\n\
-        1234567890123456789012345678901234567890";  // these are 40 charachters
-    let mut data = *HEADER;
-    data[HEADER.len()-40..].copy_from_slice(&hash[..40]);
-
-    full_write(stream, &data, "Failed to send commit hash")
+fn handle_version(stream: &mut TcpStream, globals: &Arc<Globals>) -> Res {
+    // TODO: avoid allocations to pre-building packet?
+    // TODO: should functions like this map_err to show where the issue is?
+    send_data(200, &globals.git_hash, stream)
+        .map_err(|_| "Failed to send version")
 }
 
 fn handle_ws(req: &str, mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
@@ -94,7 +81,7 @@ pub fn handle(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
         "/mobile" | "/m" => send_data(200, &globals.mobile_html, &mut stream),
         "/ws"            => handle_ws(req, stream, globals),  // start WS
         "/robots.txt"    => handle_robots(&mut stream),
-        "/version"       => handle_version(&mut stream),
+        "/version"       => handle_version(&mut stream, globals),
         _                => send_data(404, &globals.four0four, &mut stream),
     }
 }

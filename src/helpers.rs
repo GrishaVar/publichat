@@ -20,6 +20,7 @@ pub fn read_exact(stream: &mut impl Read, buf: &mut [u8], err: &'static str) -> 
 
 pub struct Globals {  // owns all its data!
     pub data_dir:    PathBuf,
+    pub git_hash:    [u8; 40],
     pub index_html:  Vec<u8>,
     pub mobile_html: Vec<u8>,
     pub client_js:   Vec<u8>,

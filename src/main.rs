@@ -26,27 +26,50 @@ fn handle_incoming(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
 }
 
 fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    let data_dir = if let Some(path) = args.last() {
-        let path = Path::new(path);
-        if !path.is_dir() {
-            println!("Not a directory: {:?}", path);
-            std::process::exit(1);
-        }
-        path.to_path_buf()  // put on heap
-    } else {
-        println!("No path given");
-        std::process::exit(2);
-    };
-    println!("Using directory {:?}", data_dir.canonicalize().unwrap());
-
-    let listener = TcpListener::bind(IP_PORT).unwrap_or_else(|_| {
-        println!("Failed to bind TCP port. Exiting...");
-        std::process::exit(3);
-    });
-
     let globals = {
-        fn file_getter(path: &str) -> Vec<u8> {
+
+        // Get chat directory path
+        let data_dir = {
+            let args: Vec<String> = std::env::args().skip(1).collect();
+            if let Some(path) = args.last() {
+                let path = Path::new(path);
+                if !path.is_dir() {
+                    println!("Not a directory: {:?}", path);
+                    std::process::exit(1);
+                }
+                path.to_path_buf()  // put on heap
+            } else {
+                println!("No path given");
+                std::process::exit(2);
+            }
+        };
+        println!("Using directory {:?}", data_dir.canonicalize().unwrap());
+
+        // Get git hash
+        let git_hash = {
+            let output = std::process::Command::new("git")
+                .args(["rev-parse", "HEAD"])
+                .output()
+                .unwrap_or_else(|_| {
+                    println!("Failed to exec git command");
+                    std::process::exit(3);
+                });
+
+            let git_output = output.stdout;  // has a \n at the end!
+            if git_output.len() != 41
+                || *git_output.last().unwrap() != b'\n'
+                || std::str::from_utf8(&git_output).is_err() {
+                    println!("Received strange data from git");
+                    std::process::exit(4);
+                }
+
+            let mut git_hash = [0; 40];
+            git_hash.copy_from_slice(&git_output[..40]);
+            git_hash
+        };
+        println!("Using git hash {}", std::str::from_utf8(&git_hash).unwrap());
+
+        fn file_getter(path: &'static str) -> Vec<u8> {
             fs::read(path).unwrap_or_else(|_| {
                 println!("Failed to open file: {}", path);
                 std::process::exit(4);
@@ -55,6 +78,7 @@ fn main() {
 
         Arc::new(Globals {
             data_dir,
+            git_hash,
             index_html:  file_getter("page/index.html"),
             mobile_html: file_getter("page/mobile.html"),
             client_js:   file_getter("page/client.js"),
@@ -62,6 +86,11 @@ fn main() {
             four0four:   file_getter("page/404.html"),
         })
     };
+
+    let listener = TcpListener::bind(IP_PORT).unwrap_or_else(|_| {
+        println!("Failed to bind TCP port. Exiting...");
+        std::process::exit(3);
+    });
 
     for stream in listener.incoming() {
         if let Ok(stream) = stream {
