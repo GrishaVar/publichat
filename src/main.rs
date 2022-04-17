@@ -40,31 +40,6 @@ fn main() {
     };
     println!("Using directory {:?}", data_dir.canonicalize().unwrap());
 
-    {  // testing db
-        const COUNT: usize = 25;  // no more than 94
-
-        let msgs: Vec<MessageSt> = (0..COUNT as u8).map(|i| {[i+b'!'; MSG_ST_SIZE]}).collect();
-        let path = data_dir.join("test.msgs");
-
-        let t1 = std::time::SystemTime::now();
-        for msg in msgs.iter() {db::push(&path, msg).unwrap()}
-
-        let t2 = std::time::SystemTime::now();
-        for i in 0..COUNT {
-            db::query(&path, i as u32, 20, true).unwrap();
-        }
-
-        let t3 = std::time::SystemTime::now();
-        for i in 0..COUNT {
-            db::query(&path, i as u32, 20, false).unwrap();
-        }
-
-        let t4 = std::time::SystemTime::now();
-        println!("Pushing {} messages: {}μs",       COUNT, t2.duration_since(t1).unwrap().as_micros());
-        println!("Fetching forward {} times: {}μs", COUNT, t3.duration_since(t2).unwrap().as_micros());
-        println!("Fetching bckward {} times: {}μs", COUNT, t4.duration_since(t3).unwrap().as_micros());
-    }
-
     let listener = TcpListener::bind(IP_PORT).unwrap_or_else(|_| {
         println!("Failed to bind TCP port. Exiting...");
         std::process::exit(3);
