@@ -1,6 +1,8 @@
 use std::{sync::Arc, io::{Read, Write}, path::Path};
 
-use crate::{constants::*, db, helpers::*};
+use crate::db;
+
+use publichat::{constants::*, helpers::*};
 
 fn query_bytes_to_args(data: &[u8; 4]) -> (u32, u8, bool) {
     let forward = data[0] & 0x80 != 0;  // check first bit

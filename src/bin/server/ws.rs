@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use std::io::{self, Write, Read, Error, ErrorKind};
 use sha1_smol::Sha1;
 
-use crate::{Res, full_write};
+use publichat::helpers::*;
 
 pub struct WsStream {
     tcp: TcpStream,
