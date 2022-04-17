@@ -20,12 +20,17 @@
         --bg2: #E0DEDE;
         --bg3: #efd4dc;
         --borders1: #603;
-        --borders2: #603;
+        --borders2: #603;  /* border around messages (not used) */
+
+        --status_ok: #0a0;
+        --status_wait: rgb(207, 172, 15);
+        --status_err: #ff2851;
       }
       body {
-        height: 100%;
-        min-height: -webkit-fill-available;  /* MAGIC! */
+        height: 100vh;
+        max-height: -webkit-fill-available;  /* MAGIC! */
         margin: 0;
+
         display: flex;
         flex-direction: column;
       }
@@ -34,9 +39,8 @@
       .top {
         flex-grow: 1;
         background-color: var(--bg2);
-        min-height: 50px;
-        max-height: 100px;
-        height: 10%;
+        min-height: 75px;
+        max-height: 75px;
         
         display: flex;
         flex-direction: row;
@@ -45,8 +49,8 @@
         flex-grow: 1;
         background-color: var(--bg2);
         max-width: 15px;
-        padding-left: 5px;
-        padding-right: 2px;
+        padding-left: 10px;
+        padding-right: 10px;
         
         justify-content: center;
         align-items: center;
@@ -54,7 +58,7 @@
         display: flex;
       }
       .socket_button {
-        background-color: orangered;
+        background-color: var(--status_err);
         width: 10vh;
         height: 10vh;
         max-width: 15px;
@@ -66,10 +70,10 @@
         display: block;
         background-color: var(--bg2);
         font-size: 30pt;
+        padding-left: 0px;
         font-family: verdana;
         border: 0px;
         outline: none;
-
       }
 
       /* ********** MESSAGE_LIST ********** */
@@ -78,14 +82,16 @@
         background-color: var(--bg1);
         border-bottom: 4px solid var(--borders1);
         border-top: 4px solid var(--borders1);
-        height: 0vh;  /* This is imporant, not sure why */
+        
+        display: flex;
+        flex-direction: column;
       }
       .message {
         background: var(--bg3);
         width: fit-content;
-        max-width: 96%;  /* TODO: magic number doesn't even work*/
+        max-width: 96%;
         margin: 10px;
-        border: 1px solid var(--borders2);
+        /* border: 1px solid #ffe4ec; */
         border-radius: 12px;
         padding: 5px;
         
@@ -94,7 +100,7 @@
       }
       .username {
         flex-grow: 1;
-        font-size: 13pt;
+        font-size: 16pt;
         font-family: verdana;
         width: min-content;
         border-radius: 5px;
@@ -102,13 +108,12 @@
       }
       .date {
         flex-grow: 1;
-        font-size: 12pt;
+        font-size: 14pt;
         font-family: verdana;
-
       }
       .content {
         flex-grow: 1;
-        font-size: 16pt;
+        font-size: 22pt;
         font-family: verdana;
         overflow-wrap: break-word;
       }
@@ -117,8 +122,8 @@
       .bottom {
         flex-grow: 1;
         background-color: var(--bg2);
-        min-height: 50px;
-        max-height: 100px;
+        min-height: 150px;
+        max-height: 150px;
         margin: 0;
 
         display: flex;
@@ -129,7 +134,6 @@
         min-height: 40px;
         background-color: var(--bg2);
         border: 0px;
-        border-bottom: 2px solid var(--borders1);
         font-size: 20pt;
         font-family: verdana;
         outline: none;
@@ -139,7 +143,8 @@
       .sending_div {
         flex-grow: 1;
         min-height: 60px;
-        border-top: 1px solid var(--bg2);
+        background-color: var(--bg2);
+        border-top: 2px solid var(--borders1);
         display: flex;
         flex-direction: row;
       }
@@ -192,7 +197,7 @@
   <body>
     <div class="top">
       <div class="socket_button_div">
-        <span class="socket_button" id="join_stop_button"></span>
+        <span class="socket_button" id="socket_button"></span>
       </div>
       <input class="title" id="title" type="text" placeholder="Chat Title" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     </div>
@@ -202,7 +207,7 @@
         <div class="username">Admin</div>
         <div class="time">13:37 - 3 March 2022</div>
         <div class="content">
-          Publichat is a peer to peer encrypted chat website where users can enter a chatroom based on a title. The messages are encrypted with the title as the key using AES and the title is hashed with SHA3 before it is all send to the server. As a result the server cannot read the chat content or know what the shared title was.
+          Publichat is an end to end encrypted chat website where users can enter a chatroom based on a title. The messages are encrypted with the title as the key using AES and the title is hashed with SHA3 before it is all send to the server. As a result the server cannot read the chat content or know what the shared title was.
 
           Enter a title above and press play to join a chat.
         </div>
@@ -218,8 +223,8 @@
     </div>
 
     <div class="bottom">
-      <input type="text" class="secret_identifer" id="password" placeholder="Username (secret)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-      <div class="sending_div">
+      <input type="text" class="secret_identifer" id="password" placeholder="Secret Username" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      <div class="sending_div" id="sending_div">
         <input type="text" class="message_entry" id="message_entry" placeholder="Write message here..." maxlength="127">
         <div class="send_button_div">
           <div class="send_button" id="send_button">
