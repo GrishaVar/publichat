@@ -1,6 +1,4 @@
 main = function() {
-  
-
   var max_message_id = Number.MIN_SAFE_INTEGER;
   var min_message_id = Number.MAX_SAFE_INTEGER;
   var message_byte_size = 168;
@@ -150,65 +148,91 @@ main = function() {
     // read packet header
     var msg_padding = bytes.splice(0, 3);
     var chat_id_byte = bytes.splice(0, 1);
-    var msg_id = unpack_number(bytes.splice(0, 3));
-    var msg_count_and_direction = bytes.splice(0, 1)[0];
-    var msg_count = msg_count_and_direction & 0x7f;
-    var read_forward = (msg_count_and_direction & 0x80) > 0;
+    var message_id = unpack_number(bytes.splice(0, 3));
+    var message_count_and_direction = bytes.splice(0, 1)[0];
+    var message_count = message_count_and_direction & 0x7f;
+    var build_upwards = (message_count_and_direction & 0x80) == 0;
 
-    if (msg_padding[0] != rcv_padding[0]) {shutdown("smrt: incorrect msg padding");}
-    if (msg_padding[1] != rcv_padding[1]) {shutdown("smrt: incorrect msg padding");}
-    if (msg_padding[2] != rcv_padding[2]) {shutdown("smrt: incorrect msg padding");}
+    console.log("123", build_upwards, min_message_id, message_id, max_message_id); 
+
+    if (msg_padding[0] != rcv_padding[0]) {shutdown("smrt: incorrect msg padding 1");}
+    if (msg_padding[1] != rcv_padding[1]) {shutdown("smrt: incorrect msg padding 2");}
+    if (msg_padding[2] != rcv_padding[2]) {shutdown("smrt: incorrect msg padding 3");}
     if (chat_id_byte != chat_id_hash[0]) {set_status(0); return;}
-    //if (msg_id > max_message_id+1) {set_status(0); return;}
-    //if (msg_id < min_message_id-msg_count) {set_status(0); return;}
-    if (msg_count != bytes.length / message_byte_size) {set_status(3); return;}
-    
-    read_message_bytes(bytes, msg_id, read_forward, msg_count);
-    set_status(0);  // green button top left
-  };
+    //if (message_id > max_message_id+1) {set_status(0); return;}
+    //if (message_id < min_message_id-message_count) {set_status(0); return;}
+    if (message_count != bytes.length / message_byte_size) {set_status(3); return;}
 
-  function read_message_bytes(bytes, msg_id, read_forward, count) {
-    if (bytes == null || bytes == []) {console.log("recevied empty");return;}
-    // Checks current scroll height (this needs to be checked BEFORE the message is added)
-    var scroll_pos = (message_list_div.scrollTop + message_list_div.clientHeight);
-    var scroll_threshold = (message_list_div.scrollHeight * 0.90);
-    var scroll_to_message = scroll_pos > scroll_threshold || message_list_div.scrollTop < 10;
-    var last_message = null;
-
-    if (read_forward) {   // insert at bottom; read messages normally
-      while (bytes.length > 0) {
-        var single_message = bytes.splice(0, message_byte_size);
-        last_message = bytes_to_message(single_message, msg_id);
-        msg_id += 1;
-      }
-    } else { // insert at top; read messages backwards
-      msg_id += count - 1;  // set to top id; decrement as we go
-      while (bytes.length > 0) {
-        var single_message = bytes.splice(-message_byte_size);
-        last_message = bytes_to_message(single_message, msg_id);
-        msg_id -= 1;
-      }
-    }
-
-    // scroll to bottom if user is already at bottom
-    if (scroll_to_message && last_message != null) {last_message.scrollIntoView();}
-  };
-  function bytes_to_message(bytes, message_id) {
-    //message: Message ID, Time, USER ID, Message cypher, Signature
-    // var message_id = unpack_number(bytes.splice(0, 4)); // 4 bytes
-    var time = unpack_number(bytes.splice(0, 8)); // 8 bytes
-    var user_id = aesjs.utils.hex.fromBytes(bytes.splice(0, 32)); // 32 bytes
-    var encrypted_bytes = bytes.splice(0, 128);
-    //var Signature = bytes.splice(0, 128);   // veryify this at some point*/
-    // build direction (are messages new or old?)
-    var build_upwards = message_id < min_message_id;
     if (!build_upwards && max_message_id > message_id) {
       console.log("Recived non contiguous messages (min-id-max)", min_message_id, message_id, max_message_id); 
       return null;
     }
-    max_message_id = Math.max(max_message_id, message_id);
-    min_message_id = Math.min(min_message_id, message_id);
-    // username
+
+    if (build_upwards) {
+      if (min_message_id == message_id-message_count && min_message_id != Number.MAX_SAFE_INTEGER) {
+        console.log(
+          "Dropped non-adjacent message packet (up) min-id-count", 
+          min_message_id,
+          message_id,
+          message_count 
+        ); 
+        return;
+      }
+      max_message_id = Math.max(max_message_id, message_id + message_count - 1);
+      min_message_id = message_id;
+    } else {
+      if (max_message_id == message_id-1 && max_message_id != Number.MIN_SAFE_INTEGER) {
+        console.log(
+          "Dropped non-adjacent message packet (down) max-id-count", 
+          max_message_id,
+          message_id,
+          message_count 
+        ); 
+        return;
+      }
+      max_message_id = message_id + message_count - 1;
+      min_message_id = Math.min(min_message_id, message_id);
+    }
+    
+    read_message_bytes(bytes, build_upwards);
+    set_status(0);  // green button top left
+  };
+
+  function read_message_bytes(bytes, build_upwards) {
+    if (bytes == null || bytes == []) {console.log("recevied empty");return;}
+    // Checks current scroll height (this needs to be checked BEFORE the message is added)
+    var scroll_pos = (message_list_div.scrollTop + message_list_div.clientHeight);
+    var scroll_down = scroll_pos > (message_list_div.scrollHeight * 0.90);
+    var scroll_up = message_list_div.scrollTop < 10;
+    var scroll_target = null;
+
+    if (build_upwards) { // insert at top; read messages backwards
+      console.log(message_list_div.children[0]);
+      scroll_target = message_list_div.children[0];
+      while (bytes.length > 0) {
+        var single_message = bytes.splice(-message_byte_size);
+        bytes_to_message(single_message, build_upwards);
+      }
+    } else { // insert at bottom; read messages normally
+      while (bytes.length > 0) {
+        var single_message = bytes.splice(0, message_byte_size);
+        scroll_target = bytes_to_message(single_message, build_upwards);
+      }
+    }
+
+    // scroll to bottom if user is already at bottom
+    if ((scroll_down || scroll_up) && scroll_target != null) {
+      scroll_target.scrollIntoView();
+    }
+  };
+  function bytes_to_message(bytes, build_upwards) {
+    //message:Time, USER ID, Message cypher, Signature
+    var time = unpack_number(bytes.splice(0, 8)); // 8 bytes
+    var user_id = aesjs.utils.hex.fromBytes(bytes.splice(0, 32)); // 32 bytes
+    var encrypted_bytes = bytes.splice(0, 128);
+    //var Signature = bytes.splice(0, 128);   // veryify this at some point*/
+
+    // username string
     var username_string = user_id.slice(0,20); // check if user is the empty hash sha3("")
     if (user_id == "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"){
       username_string = "79985aAnonymous"; // 507550 is hex for green
@@ -269,11 +293,12 @@ main = function() {
       return;
     }
     // check if chat title has changed
-    if (title == old_title && max_message_id >= 0) {
+    if (title == old_title) {
       query_messages(title, false);  // false means new messages
     } else {
       set_status(1);  // yellow button top left will be made green by receive
       // update chat list to new title
+      console.log(max_message_id, min_message_id);
       clear_messages();
       max_message_id = Number.MIN_SAFE_INTEGER;
       min_message_id = Number.MAX_SAFE_INTEGER;
