@@ -15,25 +15,41 @@ fn get_chat_file(chat_id: &Hash, data_dir: &Path) -> std::path::PathBuf {
     data_dir.join(base64::encode_config(chat_id, Config::new(UrlSafe, false)))
 }
 
-fn send_messages(stream: &mut (impl Read + Write), msgs: &[MessageSt], first_id: u32) -> Res {
+fn send_messages(
+    stream: &mut (impl Read + Write),
+    chat_id: &Hash,
+    msg_id: u32,  // id of first message in msgs
+    forward: bool,
+    msgs: &[MessageSt]
+) -> Res {
     // converts MessageSt to MessageOut and sends each into stream
     // msg::storage_to_packet
     // TcpStream::write
     if msgs.is_empty() { return Ok(()) }
 
-    let mut buffer = [0; MAX_FETCH_AMOUNT as usize * MSG_OUT_SIZE];
+    let len = u8::try_from(msgs.len())
+        .map_err(|_| "Sending more than 255 messages")?;
+
+    // Use max size buffer - size not known, but stack is big anyway
+    let mut buffer = [0; HED_OUT_SIZE + MSG_OUT_SIZE * MAX_FETCH_AMOUNT as usize];
+
+    // construct header for messages
+    buffer[HED_OUT_PAD..HED_OUT_CHAT_ID_BYTE].copy_from_slice(&MSG_PADDING);
+    buffer[HED_OUT_CHAT_ID_BYTE..HED_OUT_MSG_ID].copy_from_slice(&chat_id[..1]);  // only 1st
+    buffer[HED_OUT_MSG_ID..HED_OUT_MSG_COUNT].copy_from_slice(&msg_id.to_be_bytes()[1..]);
+    buffer[HED_OUT_MSG_COUNT] = (u8::from(forward) << 7) | len;
+
+    // fill buffer with messages
     for (i, msg) in msgs.iter().enumerate() {
-        let msg_pos: usize = MSG_OUT_SIZE * i as usize;
-        msg::storage_to_packet(
-            msg,
-            &mut buffer[msg_pos..][..MSG_OUT_SIZE],
-            first_id + i as u32,
-        );  // todo: send one msg_id per packet to reduce redundant info
+        let msg_pos: usize = HED_OUT_SIZE + MSG_OUT_SIZE * i as usize;
+
+        buffer[msg_pos..][..MSG_OUT_SIZE].copy_from_slice(msg);
+        // TODO: write all messages in one go (db should return flat array)
     }
 
     full_write(
         stream,
-        &buffer[..msgs.len()*MSG_OUT_SIZE],
+        &buffer[..HED_OUT_SIZE + msgs.len() * MSG_OUT_SIZE],
         "Failed to send messages in SMRT",
     )
 }
@@ -71,8 +87,8 @@ pub fn handle(mut stream: (impl Read + Write), globals: &Arc<Globals>) -> Res {
                 // todo: add count to fetch message
 
                 // fetch from db & send to client
-                let (id, messages) = db::fetch(&path, DEFAULT_FETCH_AMOUNT)?;
-                send_messages(&mut stream, &messages, id)?;
+                let (msg_id, messages) = db::fetch(&path, DEFAULT_FETCH_AMOUNT)?;
+                send_messages(&mut stream, &chat_id_buf, msg_id, true, &messages)?;
             },
             QUERY_PADDING => {
                 // fill chat_id and arg buffer
@@ -86,8 +102,8 @@ pub fn handle(mut stream: (impl Read + Write), globals: &Arc<Globals>) -> Res {
                 let path = get_chat_file(&chat_id_buf, &globals.data_dir);
 
                 // return query
-                let (id, messages) = db::query(&path, msg_id, count, forward)?;
-                send_messages(&mut stream, &messages, id)?;
+                let (msg_id, messages) = db::query(&path, msg_id, count, forward)?;
+                send_messages(&mut stream, &chat_id_buf, msg_id, forward, &messages)?;
             },
             _ => return Err("Recieved invalid SMRT header"),
         }

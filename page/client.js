@@ -19,12 +19,14 @@ main = function() {
 
   var max_message_id = Number.MIN_SAFE_INTEGER;
   var min_message_id = Number.MAX_SAFE_INTEGER;
-  var message_byte_size = 172;
+  var message_byte_size = 168;
   var message_content_lenght = 128;
-  var fch_padding = [102,  99, 104]; //"fch"
-  var qry_padding = [113, 114, 121]; //"qry"
-  var snd_padding = [115, 110, 100]; //"snd"
-  var end_padding = [101, 110, 100]; //"end"
+  var fch_padding = [102,  99, 104];  // "fch"
+  var qry_padding = [113, 114, 121];  // "qry"
+  var snd_padding = [115, 110, 100];  // "snd"
+  var end_padding = [101, 110, 100];  // "end"
+  var rcv_padding = [109, 115, 103];  // "msg"
+  var chat_id_hash = [];  // hash of current chat id
   var send_button = document.getElementById("send_button");
   var socket_button = document.getElementById("socket_button");
   var sending_div = document.getElementById("sending_div");
@@ -104,7 +106,9 @@ main = function() {
   // *********************************SHUTDOWN*********************************
   function shutdown(e) {
     loop=false;
-    console.log('ws error! '+e.code+e.reason);
+    if (typeof e != "string") {console.log("ws error! "+e.code+e.reason);}
+    else {console.log(e);}
+    
     send_button.style.backgroundColor = style.getPropertyValue("--status_err");
     set_status(2);  // red button top left
   };
@@ -127,26 +131,55 @@ main = function() {
     var result = reader.result;
     var bytes_u8_array = new Uint8Array(result);
     var bytes = Array.from(bytes_u8_array);
-    read_message_bytes(bytes);
+    // read packet header
+    var msg_padding = bytes.splice(0, 3);
+    var chat_id_byte = bytes.splice(0, 1);
+    var msg_id = unpack_number(bytes.splice(0, 3));
+    var msg_count_and_direction = bytes.splice(0, 1)[0];
+    var msg_count = msg_count_and_direction & 0x7f;
+    var read_forward = (msg_count_and_direction & 0x80) > 0;
+
+    if (msg_padding[0] != rcv_padding[0]) {shutdown("smrt: incorrect msg padding");}
+    if (msg_padding[1] != rcv_padding[1]) {shutdown("smrt: incorrect msg padding");}
+    if (msg_padding[2] != rcv_padding[2]) {shutdown("smrt: incorrect msg padding");}
+    if (chat_id_byte != chat_id_hash[0]) {set_status(0); return;}
+    //if (msg_id > max_message_id+1) {set_status(0); return;}
+    //if (msg_id < min_message_id-msg_count) {set_status(0); return;}
+    if (msg_count != bytes.length / message_byte_size) {set_status(3); return;}
+    
+    read_message_bytes(bytes, msg_id, read_forward, msg_count);
     set_status(0);  // green button top left
   };
 
-  function read_message_bytes(bytes) {
+  function read_message_bytes(bytes, msg_id, read_forward, count) {
     if (bytes == null || bytes == []) {console.log("recevied empty");return;}
-    var last_message = null;
     // Checks current scroll height (this needs to be checked BEFORE the message is added)
     var scroll_pos = (message_list_div.scrollTop + message_list_div.clientHeight);
     var scroll_threshold = (message_list_div.scrollHeight * 0.90);
-    while(bytes.length > 0) {
-      var single_message = bytes.splice(0, message_byte_size);
-      last_message = bytes_to_message(single_message);
+    var scroll_to_message = scroll_pos > scroll_threshold || message_list_div.scrollTop < 10;
+    var last_message = null;
+
+    if (read_forward) {   // insert at bottom; read messages normally
+      while (bytes.length > 0) {
+        var single_message = bytes.splice(0, message_byte_size);
+        last_message = bytes_to_message(single_message, msg_id);
+        msg_id += 1;
+      }
+    } else { // insert at top; read messages backwards
+      msg_id += count - 1;  // set to top id; decrement as we go
+      while (bytes.length > 0) {
+        var single_message = bytes.splice(-message_byte_size);
+        last_message = bytes_to_message(single_message, msg_id);
+        msg_id -= 1;
+      }
     }
+
     // scroll to bottom if user is already at bottom
-    if (scroll_pos > scroll_threshold && last_message != null) {last_message.scrollIntoView();}
+    if (scroll_to_message && last_message != null) {last_message.scrollIntoView();}
   };
-  function bytes_to_message(bytes) {
+  function bytes_to_message(bytes, message_id) {
     //message: Message ID, Time, USER ID, Message cypher, Signature
-    var message_id = unpack_number(bytes.splice(0, 4)); // 4 bytes
+    // var message_id = unpack_number(bytes.splice(0, 4)); // 4 bytes
     var time = unpack_number(bytes.splice(0, 8)); // 8 bytes
     var user_id = aesjs.utils.hex.fromBytes(bytes.splice(0, 32)); // 32 bytes
     var encrypted_bytes = bytes.splice(0, 128);
@@ -154,7 +187,7 @@ main = function() {
     // build direction (are messages new or old?)
     var build_upwards = message_id < min_message_id;
     if (!build_upwards && max_message_id > message_id) {
-      console.log("Recived non contigios messages (min-id-max)", min_message_id, message_id, max_message_id); 
+      console.log("Recived non contiguous messages (min-id-max)", min_message_id, message_id, max_message_id); 
       return null;
     }
     max_message_id = Math.max(max_message_id, message_id);
@@ -197,7 +230,7 @@ main = function() {
 
     var bg_colour = "#" + username_string.slice(0,6);
     usr_div.style.background = bg_colour;
-    usr_div.style.color = white_or_black(bg_colour);  // selects 'highest' contrast
+    usr_div.style.color = white_or_black(bg_colour);  // selects best contrast
     usr_div.innerHTML = username_string.slice(6);
     time_div.innerHTML = date_string;
     content_div.innerHTML = message_string;
@@ -274,6 +307,7 @@ main = function() {
   function fetch_messages(title) {
     var chat_key = sha3_256.array(title);
     var chat_id = sha3_256.array(chat_key);
+    chat_id_hash = chat_id;
     ws_send([].concat(fch_padding, chat_id, end_padding));
   };
   function query_messages(title, up) {

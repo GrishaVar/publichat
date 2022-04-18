@@ -8,7 +8,8 @@ pub const RSA_SIZE: usize = HASH_SIZE;  // 5;  // todo: what is the correct leng
 pub const CYPHER_SIZE: usize = 128;
 pub const QUERY_ARG_SIZE: usize = std::mem::size_of::<u32>();
 pub const TIME_SIZE: usize = std::mem::size_of::<u64>();
-pub const MSG_ID_SIZE: usize = std::mem::size_of::<u32>();
+pub const MSG_ID_SIZE: usize = QUERY_ARG_SIZE - 1;
+//pub const QUERY_DIRECTION_COUNT: usize = QUERY_ARG_SIZE - MSG_ID_SIZE;
 
 pub const MAX_FETCH_AMOUNT: u8 = 50;
 pub const DEFAULT_FETCH_AMOUNT: u8 = 50;
@@ -35,9 +36,15 @@ pub const MSG_ST_CYPHER_START: usize    = MSG_ST_RSA_START + RSA_SIZE;
 pub const MSG_ST_SIGNATURE: usize       = MSG_ST_CYPHER_START + CYPHER_SIZE;
 pub const MSG_ST_SIZE: usize            = MSG_ST_SIGNATURE + SIG_SIZE;
 
-// Sizes of outgoing network packets
-pub const MSG_OUT_ID: usize             = 0;
-pub const MSG_OUT_TIME: usize           = MSG_OUT_ID + MSG_ID_SIZE;
+// Server outgoing header
+pub const HED_OUT_PAD: usize            = 0;
+pub const HED_OUT_CHAT_ID_BYTE: usize   = HED_OUT_PAD + PADDING_SIZE;
+pub const HED_OUT_MSG_ID: usize         = HED_OUT_CHAT_ID_BYTE + 1;  // only 1st
+pub const HED_OUT_MSG_COUNT: usize      = HED_OUT_MSG_ID + MSG_ID_SIZE;
+pub const HED_OUT_SIZE: usize           = HED_OUT_MSG_COUNT + 1;  // max 127
+
+// Sizes of an outgoing message
+pub const MSG_OUT_TIME: usize           = 0;
 pub const MSG_OUT_RSA: usize            = MSG_OUT_TIME + TIME_SIZE;
 pub const MSG_OUT_CYPHER: usize         = MSG_OUT_RSA + RSA_SIZE;
 pub const MSG_OUT_SIG: usize            = MSG_OUT_CYPHER + CYPHER_SIZE;
@@ -67,11 +74,14 @@ Send message to client:
 
 // NETWORK PACKETS:
 
-// Network paddings
+// Network paddings (to server)
 pub const SEND_PADDING:  [u8; PADDING_SIZE] = *b"snd";
 pub const FETCH_PADDING: [u8; PADDING_SIZE] = *b"fch";
 pub const QUERY_PADDING: [u8; PADDING_SIZE] = *b"qry";
 pub const END_PADDING:   [u8; PADDING_SIZE] = *b"end";
+
+// Network paddings (to client)
+pub const MSG_PADDING:   [u8; PADDING_SIZE] = *b"msg";
 
 // Sizes of incomming fetch packets
 pub const FCH_CHAT_ID: usize        = 0;

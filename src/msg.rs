@@ -18,6 +18,8 @@ pub fn packet_to_storage(src: &MessageIn, dest: &mut MessageSt) -> Hash {
     chat_id
 }
 
+
+// obsolete
 pub fn storage_to_packet(src: &MessageSt, dest: &mut [u8], msg_id: u32) {
     // Takes bytes from chat file
     // adds the chat id and message id
