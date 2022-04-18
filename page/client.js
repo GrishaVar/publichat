@@ -244,7 +244,7 @@ main = function() {
       return;
     }
     // check if chat title has changed (and we have received essages)
-    if (title == old_title && max_message_id > min_message_id) {
+    if (title == old_title && max_message_id >= min_message_id) {
       query_messages(title, false);  // false means new messages
     } else {
       set_status(1);  // yellow button top left will be made green by receive
