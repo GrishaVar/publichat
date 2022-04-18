@@ -21,9 +21,10 @@ pub fn read_exact(stream: &mut impl Read, buf: &mut [u8], err: &'static str) -> 
 pub struct Globals {  // owns all its data!
     pub data_dir:    PathBuf,
     pub git_hash:    [u8; 40],
-    pub index_html:  Vec<u8>,
-    pub mobile_html: Vec<u8>,
-    pub client_js:   Vec<u8>,
-    pub favicon_ico: Vec<u8>,
-    pub four0four:   Vec<u8>,  // 404
 }
+
+pub const FILE_INDEX_HTML:  &[u8] = include_bytes!("../page/index.html");
+pub const FILE_MOBILE_HTML: &[u8] = include_bytes!("../page/mobile.html");
+pub const FILE_404_HTML:    &[u8] = include_bytes!("../page/404.html");
+pub const FILE_CLIENT_JS:   &[u8] = include_bytes!("../page/client.js");
+pub const FILE_FAVICON_ICO: &[u8] = include_bytes!("../page/favicon.ico");

@@ -1,4 +1,4 @@
-use std::{net::{TcpListener, TcpStream}, path::Path, sync::Arc, thread::{self, Builder}, fs};
+use std::{net::{TcpListener, TcpStream}, path::Path, sync::Arc, thread::{self, Builder}};
 
 mod db;
 mod msg;
@@ -69,21 +69,9 @@ fn main() {
         };
         println!("Using git hash {}", std::str::from_utf8(&git_hash).unwrap());
 
-        fn file_getter(path: &'static str) -> Vec<u8> {
-            fs::read(path).unwrap_or_else(|_| {
-                println!("Failed to open file: {}", path);
-                std::process::exit(4);
-            })
-        }
-
         Arc::new(Globals {
             data_dir,
             git_hash,
-            index_html:  file_getter("page/index.html"),
-            mobile_html: file_getter("page/mobile.html"),
-            client_js:   file_getter("page/client.js"),
-            favicon_ico: file_getter("page/favicon.ico"),
-            four0four:   file_getter("page/404.html"),
         })
     };
 
