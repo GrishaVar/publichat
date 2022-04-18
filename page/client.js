@@ -231,7 +231,7 @@ main = function() {
     var bg_colour = "#" + username_string.slice(0,6);
     usr_div.style.background = bg_colour;
     usr_div.style.color = white_or_black(bg_colour);  // selects best contrast
-    usr_div.innerHTML = username_string.slice(6);
+    usr_div.innerHTML = btoa(username_string).slice(0,8);
     time_div.innerHTML = date_string;
     content_div.innerHTML = message_string;
 
