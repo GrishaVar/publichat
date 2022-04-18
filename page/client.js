@@ -1,21 +1,5 @@
 main = function() {
-  document.getElementById("send_button").onclick = function() {send_message()};
-  document.getElementById("socket_button").onclick = function() {toggle_loop();};
-  var ws_ip_port = "ws://" + location.host + "/ws";
-  const socket = new WebSocket(ws_ip_port);
-  socket.onopen = function() {console.log("socket opened"); set_status(0)};
-  socket.onerror = function(e) {shutdown(e)};
-  socket.onclose = function(e) {shutdown(e)};
-  socket.onmessage = function(e) {ws_receive(e)};
-  function ws_send(bytes) {
-    if (socket.readyState != WebSocket.OPEN) {
-      console.log("Tried sending to closed WS");
-      loop = false;
-      return;
-    }
-    var outgoing = new Uint8Array(bytes);
-    socket.send(outgoing);
-  };
+  
 
   var max_message_id = Number.MIN_SAFE_INTEGER;
   var min_message_id = Number.MAX_SAFE_INTEGER;
@@ -27,25 +11,31 @@ main = function() {
   var end_padding = [101, 110, 100];  // "end"
   var rcv_padding = [109, 115, 103];  // "msg"
   var chat_id_hash = [];  // hash of current chat id
+  var style = getComputedStyle(document.body);
   var send_button = document.getElementById("send_button");
   var socket_button = document.getElementById("socket_button");
   var sending_div = document.getElementById("sending_div");
   var message_entry = document.getElementById("message_entry");
   let message_list_div = document.getElementById("message_list");
+  send_button.onclick = function() {send_message()};
+  socket_button.onclick = function() {toggle_loop();};
 
-  var style = getComputedStyle(document.body);
+  var reader = new FileReader();
+  var socket = null;
+  open_socket();
 
   function get_title(){return document.getElementById("title").value;}
   function get_password(){return document.getElementById("password").value;}
   function get_message(){return message_entry.value;}
   function clear_messages(){message_list_div.replaceChildren();}
+
+
   function white_or_black(colour) {
     var r = parseInt(colour.slice(1,3), 16);
     var g = parseInt(colour.slice(3,5), 16);
     var b = parseInt(colour.slice(5,7), 16);
     return ((r*0.299 + g*0.587 + b*0.114) > 150) ? "#000000" : "#ffffff";
   }
-  var reader = new FileReader();
   // *******************************SET_STATUS*******************************
   function set_status(value) {
     if (value == 0) { // good = 0; wait = 1; error = 2;
@@ -56,6 +46,25 @@ main = function() {
       socket_button.style.background = style.getPropertyValue("--status_err");
     }
   }
+
+  // *******************************OPEN_SOCKET*******************************
+  function open_socket() {
+    set_status(1);
+    socket = new WebSocket("ws://" + location.host + "/ws");
+    socket.onopen = function() {console.log("socket opened"); set_status(0)};
+    socket.onerror = function(e) {shutdown(e)};
+    socket.onclose = function(e) {shutdown(e)};
+    socket.onmessage = function(e) {ws_receive(e)};
+  };
+  function ws_send(bytes) {
+    if (socket.readyState != WebSocket.OPEN) {
+      shutdown("Tried sending to dead socket");
+      return;
+    }
+    var outgoing = new Uint8Array(bytes);
+    socket.send(outgoing);
+  };
+    
   // *******************************UNPACK*******************************
   function unpack_number(bytes) {
     res = 0;
@@ -116,6 +125,13 @@ main = function() {
   // *********************************BUTTONS*********************************
   var loop = true;
   function toggle_loop() {
+    if (socket.readyState != WebSocket.OPEN) {
+      open_socket();
+      loop = false;
+      setTimeout(function() {loop = true;}, 1000);
+      return;
+    }
+
     set_status(Number(loop));
     loop = !loop;
   };
