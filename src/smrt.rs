@@ -1,6 +1,6 @@
 use std::{sync::Arc, io::{Read, Write}, path::Path};
 
-use crate::{constants::*, db, msg, helpers::*};
+use crate::{constants::*, db, helpers::*};
 
 fn query_bytes_to_args(data: &[u8; 4]) -> (u32, u8, bool) {
     let forward = data[0] & 0x80 != 0;  // check first bit
@@ -13,6 +13,24 @@ fn get_chat_file(chat_id: &Hash, data_dir: &Path) -> std::path::PathBuf {
     // encode hash into b64 and append to data_dir
     use base64::{Config, CharacterSet::UrlSafe};
     data_dir.join(base64::encode_config(chat_id, Config::new(UrlSafe, false)))
+}
+
+pub fn packet_to_storage(src: &MessageIn, dest: &mut MessageSt) -> Hash {
+    // Takes bytes from client, 
+    // Extract RSA pub, cypher, signature. Generate time.
+    // Write buffer intended for storage into dest.
+    // Return chat_id if successful
+    
+    let msg_time: u64 = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap()
+        .as_millis().try_into().expect("go play with your hoverboard");
+    dest[..TIME_SIZE].clone_from_slice(&msg_time.to_be_bytes());
+    dest[MSG_ST_RSA_START..].clone_from_slice(&src[MSG_IN_RSA..]);
+
+    // return the chat ID
+    let mut chat_id = [0; HASH_SIZE];
+    chat_id.clone_from_slice(&src[MSG_IN_CHAT_ID..][..HASH_SIZE]);
+    chat_id
 }
 
 fn send_messages(
@@ -69,7 +87,7 @@ pub fn handle(mut stream: (impl Read + Write), globals: &Arc<Globals>) -> Res {
                 read_exact(&mut stream, &mut pad_buf, "Failed to read end pad (snd)")?;
                 if pad_buf != END_PADDING { return Err("Incorrect end padding (snd)") }
  
-                chat_id_buf = msg::packet_to_storage(&snd_buf, &mut st_buf);
+                chat_id_buf = packet_to_storage(&snd_buf, &mut st_buf);
                 db::push(&get_chat_file(&chat_id_buf, &globals.data_dir), &st_buf)?;
             },
             FETCH_PADDING => {
