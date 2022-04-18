@@ -68,7 +68,7 @@ main = function() {
   // *******************************OPEN_SOCKET********************************
   function open_socket() {
     set_status(1);
-    socket = new WebSocket("ws://" + location.host + "/ws");
+    socket = new WebSocket("wss://" + location.host + "/ws");
     socket.onopen = function() {
       console.log("socket opened"); 
       setTimeout(function() {loop = true;}, 1000);
