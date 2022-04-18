@@ -3,11 +3,11 @@ main = function() {
   var min_message_id = Number.MAX_SAFE_INTEGER;
   var message_byte_size = 168;
   var message_content_lenght = 128;
-  var fch_padding = [102,  99, 104];  // "fch"
-  var qry_padding = [113, 114, 121];  // "qry"
-  var snd_padding = [115, 110, 100];  // "snd"
-  var end_padding = [101, 110, 100];  // "end"
-  var rcv_padding = [109, 115, 103];  // "msg"
+  var fch_pad = [102,  99, 104];  // "fch"
+  var qry_pad = [113, 114, 121];  // "qry"
+  var snd_pad = [115, 110, 100];  // "snd"
+  var end_pad = [101, 110, 100];  // "end"
+  var rcv_pad = [109, 115, 103];  // "msg"
   var chat_id_hash = [];  // hash of current chat id
   var style = getComputedStyle(document.body);
   var send_button = document.getElementById("send_button");
@@ -17,24 +17,44 @@ main = function() {
   let message_list_div = document.getElementById("message_list");
   send_button.onclick = function() {send_message()};
   socket_button.onclick = function() {toggle_loop();};
-
+  message_list_div.addEventListener("scroll", top_scroll_query);
+  message_entry.addEventListener("keyup",keystroke_input);
+  
   var reader = new FileReader();
   var socket = null;
+  var loop = false;
   open_socket();
 
+  // *******************************HELPERS************************************
   function get_title(){return document.getElementById("title").value;}
   function get_password(){return document.getElementById("password").value;}
   function get_message(){return message_entry.value;}
-  function clear_messages(){message_list_div.replaceChildren();}
-
-
-  function white_or_black(colour) {
+  
+  function unpack_number(bytes) {
+    res = 0;
+    for (var i = 0; i<bytes.length; i++) {
+      res *= 256;  // same as res << 8 but also works for number > 32 bit
+      res += bytes[i];
+    }
+    return res;
+  };
+  function pack_number(num, size) {
+    res = []
+    var num_copy = num;
+    for (var i = 0; i<size; i++) {
+      res.unshift(num & 0xff);
+      num = num >>> 8;
+    }
+    if (num > 0) {console.log("warning: num too big for array", num_copy, size)}
+    return res;
+  };
+  function white_or_black(colour) {  // which text colour gives more contrast
     var r = parseInt(colour.slice(1,3), 16);
     var g = parseInt(colour.slice(3,5), 16);
     var b = parseInt(colour.slice(5,7), 16);
     return ((r*0.299 + g*0.587 + b*0.114) > 150) ? "#000000" : "#ffffff";
   }
-  // *******************************SET_STATUS*******************************
+  // *******************************SET_STATUS*********************************
   function set_status(value) {
     if (value == 0) { // good = 0; wait = 1; error = 2;
       socket_button.style.background = style.getPropertyValue("--status_ok");
@@ -45,14 +65,19 @@ main = function() {
     }
   }
 
-  // *******************************OPEN_SOCKET*******************************
+  // *******************************OPEN_SOCKET********************************
   function open_socket() {
     set_status(1);
     socket = new WebSocket("ws://" + location.host + "/ws");
-    socket.onopen = function() {console.log("socket opened"); set_status(0)};
+    socket.onopen = function() {
+      console.log("socket opened"); 
+      setTimeout(function() {loop = true;}, 1000);
+      set_status(0);
+    };
     socket.onerror = function(e) {shutdown(e)};
     socket.onclose = function(e) {shutdown(e)};
     socket.onmessage = function(e) {ws_receive(e)};
+    reset_chat();
   };
   function ws_send(bytes) {
     if (socket.readyState != WebSocket.OPEN) {
@@ -62,76 +87,29 @@ main = function() {
     var outgoing = new Uint8Array(bytes);
     socket.send(outgoing);
   };
-    
-  // *******************************UNPACK*******************************
-  function unpack_number(bytes) {
-    res = 0;
-    for (var i = 0; i<bytes.length; i++) {
-      res *= 256;  // this is the same as res << 8 but also works for number > 32 bit
-      res += bytes[i];
-    }
-    return res;
-  };
-  function pack_number(num, size) {
-    res = []
-    for (var i = 0; i<size; i++) {
-      res.unshift(num & 0xff);
-      num = num >>> 8;
-    }
-    if (num > 0) {console.log("warning num did not fit in array size", num, size)}
-    return res;
-  };
-
-  // *******************************CHAR_COUNTER*******************************
-  //var counter_div = document.getElementById("content_counter");
-  message_entry.addEventListener("keyup",keystroke_input);
-  function keystroke_input(event) {
-    // send with enter (enter == 13)
-    if(event.keyCode === 13) {send_message();}
-    // update colour and value of message length counter
-    var textLength = message_entry.value.length;
-    //counter_div.textContent = textLength + "/" + (message_content_lenght-1);
-    if(textLength >= message_content_lenght-1){
-      sending_div.style.borderColor = style.getPropertyValue("--status_err");
-      send_button.style.background = style.getPropertyValue("--status_err");
-      //counter_div.style.color = "#ff2851";
-    } else {
-      sending_div.style.borderColor = style.getPropertyValue("--borders1");
-      send_button.style.background = style.getPropertyValue("--borders1");
-      //counter_div.style.color = "#757575";
-    }
-  };
-
-  // *******************************TOP_SCROLL_QUERY*******************************   
-  message_list_div.addEventListener("scroll", top_scroll_query);
-  function top_scroll_query(e) {
-    if (message_list_div.scrollTop == 0) {
-      query_messages(get_title(), true);
-    }
-  };
-
-  // *********************************SHUTDOWN*********************************
+  
+  // *********************************SHUTDOWN/RESET***************************
   function shutdown(e) {
-    loop=false;
+    loop = false;
     if (typeof e != "string") {console.log("ws error! "+e.code+e.reason);}
     else {console.log(e);}
-    
     send_button.style.backgroundColor = style.getPropertyValue("--status_err");
     set_status(2);  // red button top left
   };
-  
-  // *********************************BUTTONS*********************************
-  var loop = true;
+  function reset_chat(){
+    message_list_div.replaceChildren();
+    max_message_id = Number.MIN_SAFE_INTEGER;
+    min_message_id = Number.MAX_SAFE_INTEGER;
+  }
+  // *********************************BUTTONS**********************************
   function toggle_loop() {
     if (socket.readyState != WebSocket.OPEN) {
-      open_socket();
       loop = false;
-      setTimeout(function() {loop = true;}, 1000);
-      return;
+      open_socket();
+    } else {
+      set_status(Number(loop));
+      loop = !loop;
     }
-
-    set_status(Number(loop));
-    loop = !loop;
   };
 
   // *********************************RECEVING*********************************
@@ -153,43 +131,16 @@ main = function() {
     var message_count = message_count_and_direction & 0x7f;
     var build_upwards = (message_count_and_direction & 0x80) == 0;
 
-    console.log("123", build_upwards, min_message_id, message_id, max_message_id); 
-
-    if (msg_padding[0] != rcv_padding[0]) {shutdown("smrt: incorrect msg padding 1");}
-    if (msg_padding[1] != rcv_padding[1]) {shutdown("smrt: incorrect msg padding 2");}
-    if (msg_padding[2] != rcv_padding[2]) {shutdown("smrt: incorrect msg padding 3");}
+    if (msg_padding[0] != rcv_pad[0]) {shutdown("incorrect smrt pad 1");}
+    if (msg_padding[1] != rcv_pad[1]) {shutdown("incorrect smrt pad 2");}
+    if (msg_padding[2] != rcv_pad[2]) {shutdown("incorrect smrt pad 3");}
     if (chat_id_byte != chat_id_hash[0]) {set_status(0); return;}
-    //if (message_id > max_message_id+1) {set_status(0); return;}
-    //if (message_id < min_message_id-message_count) {set_status(0); return;}
-    if (message_count != bytes.length / message_byte_size) {set_status(3); return;}
-
-    if (!build_upwards && max_message_id > message_id) {
-      console.log("Recived non contiguous messages (min-id-max)", min_message_id, message_id, max_message_id); 
-      return null;
-    }
-
+    if (message_count*message_byte_size != bytes.length) {set_status(0);return}
+    
     if (build_upwards) {
-      if (min_message_id == message_id-message_count && min_message_id != Number.MAX_SAFE_INTEGER) {
-        console.log(
-          "Dropped non-adjacent message packet (up) min-id-count", 
-          min_message_id,
-          message_id,
-          message_count 
-        ); 
-        return;
-      }
-      max_message_id = Math.max(max_message_id, message_id + message_count - 1);
+      max_message_id = Math.max(max_message_id, message_id + message_count-1);
       min_message_id = message_id;
     } else {
-      if (max_message_id == message_id-1 && max_message_id != Number.MIN_SAFE_INTEGER) {
-        console.log(
-          "Dropped non-adjacent message packet (down) max-id-count", 
-          max_message_id,
-          message_id,
-          message_count 
-        ); 
-        return;
-      }
       max_message_id = message_id + message_count - 1;
       min_message_id = Math.min(min_message_id, message_id);
     }
@@ -200,14 +151,13 @@ main = function() {
 
   function read_message_bytes(bytes, build_upwards) {
     if (bytes == null || bytes == []) {console.log("recevied empty");return;}
-    // Checks current scroll height (this needs to be checked BEFORE the message is added)
-    var scroll_pos = (message_list_div.scrollTop + message_list_div.clientHeight);
+    // Checks current scroll height BEFORE the message is added
+    var scroll_pos = message_list_div.scrollTop+message_list_div.clientHeight;
     var scroll_down = scroll_pos > (message_list_div.scrollHeight * 0.90);
     var scroll_up = message_list_div.scrollTop < 10;
     var scroll_target = null;
 
     if (build_upwards) { // insert at top; read messages backwards
-      console.log(message_list_div.children[0]);
       scroll_target = message_list_div.children[0];
       while (bytes.length > 0) {
         var single_message = bytes.splice(-message_byte_size);
@@ -225,7 +175,7 @@ main = function() {
       scroll_target.scrollIntoView();
     }
   };
-  function bytes_to_message(bytes, build_upwards) {
+  function bytes_to_message(bytes, upwards) {
     //message:Time, USER ID, Message cypher, Signature
     var time = unpack_number(bytes.splice(0, 8)); // 8 bytes
     var user_id = aesjs.utils.hex.fromBytes(bytes.splice(0, 32)); // 32 bytes
@@ -233,31 +183,32 @@ main = function() {
     //var Signature = bytes.splice(0, 128);   // veryify this at some point*/
 
     // username string
-    var username_string = user_id.slice(0,20); // check if user is the empty hash sha3("")
-    if (user_id == "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"){
-      username_string = "79985aAnonymous"; // 507550 is hex for green
+    var username_str = user_id.slice(0,20); // is user empty hash sha3("") ?
+    if (username_str == "a7ffc6f8bf1ed76651c1"){
+      username_str = "79985aAnonymous"; // 507550 is hex for green
     }
     // date string
     var date = new Date(Number(time));
     var today = new Date();
-    if (date.toDateString() === today.toDateString()) {
-      var date_string = ""
-    } else if (date.getFullYear() === today.getFullYear()){
-      var date_string = date.toLocaleString().slice(0,-15);
+    if (date.toDateString() === today.toDateString()) {  // sent today
+      var date_str = "";
+    } else if (date.getFullYear() === today.getFullYear()){  // sent this year
+      var date_str = date.toLocaleString().slice(0,-15);
     } else {
-      var date_string = date.toLocaleString().slice(0,-10);
+      var date_str = date.toLocaleString().slice(0,-10);  // date < this year
     }
-    date_string += " " + date.toLocaleTimeString().slice(0,-3);
-    // message text
+    date_str += " " + date.toLocaleTimeString().slice(0,-3);
+    // message string
     var title = get_title();
     var chat_key = sha3_256.array(title);
-    var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, new aesjs.Counter(1));
-    var padded_decrypted_bytes = aes_cnt.decrypt(encrypted_bytes);
-    var decrypted_bytes = padded_decrypted_bytes.slice(0, -padded_decrypted_bytes.slice(-1));
-    var message_string = aesjs.utils.utf8.fromBytes(decrypted_bytes);
-    return build_message(username_string, date_string, message_string, build_upwards);
+    var cnt = new aesjs.Counter(1);
+    var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, cnt);
+    var padded_bytes = aes_cnt.decrypt(encrypted_bytes);
+    var decrypted_bytes = padded_bytes.slice(0, -padded_bytes.slice(-1));
+    var message_str = aesjs.utils.utf8.fromBytes(decrypted_bytes);
+    return build_message(username_str, date_str, message_str, upwards);
   };
-  function build_message(username_string, date_string, message_string, build_upwards) {
+  function build_message(username_str, date_str, message_str, upwards) {
     var msg_div = document.createElement("div");
     var usr_div = document.createElement("div");
     var time_div = document.createElement("div");
@@ -268,17 +219,17 @@ main = function() {
     time_div.className = "time";
     content_div.className = "content";
 
-    var bg_colour = "#" + username_string.slice(0,6);
+    var bg_colour = "#" + username_str.slice(0,6);
     usr_div.style.background = bg_colour;
     usr_div.style.color = white_or_black(bg_colour);  // selects best contrast
-    usr_div.innerHTML = btoa(username_string).slice(0,8);
-    time_div.innerHTML = date_string;
-    content_div.innerHTML = message_string;
+    usr_div.innerHTML = username_str.slice(6);
+    time_div.innerHTML = date_str;
+    content_div.innerHTML = message_str;
 
     msg_div.appendChild(usr_div);
     msg_div.appendChild(time_div);
     msg_div.appendChild(content_div);
-    if (build_upwards) {
+    if (upwards) {
       message_list_div.prepend(msg_div);
     } else {
       message_list_div.appendChild(msg_div);
@@ -292,22 +243,42 @@ main = function() {
       setTimeout(function() {mainloop(title);}, 1000);
       return;
     }
-    // check if chat title has changed
-    if (title == old_title) {
+    // check if chat title has changed (and we have received essages)
+    if (title == old_title && max_message_id > min_message_id) {
       query_messages(title, false);  // false means new messages
     } else {
       set_status(1);  // yellow button top left will be made green by receive
       // update chat list to new title
-      console.log(max_message_id, min_message_id);
-      clear_messages();
-      max_message_id = Number.MIN_SAFE_INTEGER;
-      min_message_id = Number.MAX_SAFE_INTEGER;
+      reset_chat();
       fetch_messages(title);
     }
     setTimeout(function() {mainloop(title);}, 500);
   };
   
-  // *********************************SENDING*********************************
+  // *********************************QUERY/FETCH******************************
+  function fetch_messages(title) {
+    var chat_key = sha3_256.array(title);
+    var chat_id = sha3_256.array(chat_key);
+    chat_id_hash = chat_id;
+    ws_send([].concat(fch_pad, chat_id, end_pad));
+  };
+  function query_messages(title, up) {
+    var chat_key = sha3_256.array(title);
+    var chat_id = sha3_256.array(chat_key);
+    if (up) { // query messages upward (old messages)
+      var query = [0x7f].concat(pack_number(min_message_id, 3));
+    } else { // query messages downward (new messages)
+      var query = [0xff].concat(pack_number(max_message_id, 3));
+    }
+    ws_send([].concat(qry_pad, chat_id, query, end_pad));
+  };
+  function top_scroll_query(e) {
+    if (message_list_div.scrollTop == 0  && max_message_id > min_message_id) {
+      query_messages(get_title(), true);
+    }
+  };
+
+  // *********************************SENDING**********************************
   function send_message() {
     var outbound_bytes = message_to_bytes();
     if (outbound_bytes == null) {return;}
@@ -338,28 +309,30 @@ main = function() {
     var user_id = sha3_256.array(password);  // user id is public
 
     var text_bytes = pad_message(message);
-    var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, new aesjs.Counter(1));
+    var cnt = new aesjs.Counter(1);
+    var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, cnt);
     var encrypted_bytes = Array.from(aes_cnt.encrypt(text_bytes));
 
-    return [].concat(snd_padding, chat_id, user_id, encrypted_bytes, end_padding);
+    return [].concat(snd_pad, chat_id, user_id, encrypted_bytes, end_pad);
   };
-  
-  // *********************************QUERY/FETCH*********************************
-  function fetch_messages(title) {
-    var chat_key = sha3_256.array(title);
-    var chat_id = sha3_256.array(chat_key);
-    chat_id_hash = chat_id;
-    ws_send([].concat(fch_padding, chat_id, end_padding));
-  };
-  function query_messages(title, up) {
-    var chat_key = sha3_256.array(title);
-    var chat_id = sha3_256.array(chat_key);
-    if (up) {  // query messages upward (old messages)
-      var query = [0x7f].concat(pack_number(min_message_id, 3));
-    } else {  // query messages downward (new messages)
-      var query = [0xff].concat(pack_number(max_message_id, 3));
+
+  // *******************************CHAR_COUNTER*******************************
+  //var counter_div = document.getElementById("content_counter");
+  function keystroke_input(event) {
+    // send with enter (enter == 13)
+    if(event.keyCode === 13) {send_message();}
+    // update colour and value of message length counter
+    var textLength = message_entry.value.length;
+    //counter_div.textContent = textLength + "/" + (message_content_lenght-1);
+    if(textLength >= message_content_lenght-1){
+      sending_div.style.borderColor = style.getPropertyValue("--status_err");
+      send_button.style.background = style.getPropertyValue("--status_err");
+      //counter_div.style.color = "#ff2851";
+    } else {
+      sending_div.style.borderColor = style.getPropertyValue("--borders1");
+      send_button.style.background = style.getPropertyValue("--borders1");
+      //counter_div.style.color = "#757575";
     }
-    ws_send([].concat(qry_padding, chat_id, query, end_padding));
   };
 
   mainloop("");
