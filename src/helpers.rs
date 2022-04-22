@@ -12,10 +12,7 @@ pub fn full_write(stream: &mut impl Write, buf: &[u8], err: &'static str) -> Res
 }
 
 pub fn read_exact(stream: &mut impl Read, buf: &mut [u8], err: &'static str) -> Res {
-    match stream.read_exact(buf) {
-        Ok(_) => Ok(()),
-        Err(_) => Err(err),
-    }
+    stream.read_exact(buf).map_err(|_| err)
 }
 
 pub struct Globals {  // owns all its data!
