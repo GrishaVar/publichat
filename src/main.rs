@@ -14,12 +14,38 @@ const IP_PORT: &str = "localhost:7878";
 
 fn handle_incoming(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
     let mut pad_buf = [0; 4];
-    read_exact(&mut stream, &mut pad_buf, "Failed to read protocol header")?;
 
-    match &pad_buf {
-        b"GET " => http::handle(stream, globals),
-        b"SMRT" => smrt::handle(stream, globals),
-        _ => Err("Failed to match protocol header"),
+    let mut http_handled: u8 = 0;
+    while {  // Handle repeated HTTP requests
+        println!("trying to read...");
+        stream.peek(&mut pad_buf)
+            .map_err(|_| "Failed to read protocol header (HTTP timeout?)")?;
+        println!("done reading!");
+        &pad_buf == b"GET "
+    } {
+        http::handle(
+            stream.try_clone().map_err(|_| "Failed to clone")?,
+            globals
+        )?;
+
+        http_handled += 1;  // TODO: better system for dropping connections
+        if http_handled >= 3 {
+            stream.shutdown(std::net::Shutdown::Both)
+                .map_err(|_| "HTTP shutdown failed")?;
+            return Ok(());
+        }
+        if http_handled == 1 {
+            stream.set_read_timeout(Some(std::time::Duration::from_secs(1)))
+                .map_err(|_| "Failed to set short timeout")?;
+        }
+    }
+
+    // HTTP finished. Read either SMRT or fail.
+    if &pad_buf == b"SMRT" {
+        read_exact(&mut stream, &mut pad_buf, "Failed to remove SMRT buffer")?;
+        smrt::handle(stream, globals)
+    } else {
+        Err("Failed to match protocol header")
     }
 }
 

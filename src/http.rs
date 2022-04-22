@@ -58,7 +58,7 @@ fn handle_ws(req: &str, mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
 }
 
 pub fn handle(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
-    // Handles GET requests (where first four bytes "GET " already consumed)
+    // Handles GET requests
     let mut buf = [0; 1024];  // todo: think more about sizes
     stream.read(&mut buf).map_err(|_| "Failed to read HTTP packet")?;
     let req = std::str::from_utf8(&buf).map_err(|_| "Recieved non-utf8 HTTP")?;
@@ -69,7 +69,7 @@ pub fn handle(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
         return Err("Received very large HTTP packet; aborted.")
     }
 
-    let path = match req.split(' ').next() {
+    let path = match req.split(' ').nth(1) {  // path is 2nd word of GET
         Some(p) => p,
         None => return Err("Failed to find HTTP path"),  // faulty HTTP
     };
