@@ -44,7 +44,6 @@ fn send_messages(
     // converts MessageSt to MessageOut and sends each into stream
     // msg::storage_to_packet
     // TcpStream::write
-    if count == 0 { return Ok(()) }
     if count > 127 { return Err("Tried to send too many messages") }
 
     // Use max size buffer - size not known, but stack is big anyway
@@ -63,7 +62,6 @@ fn send_messages(
     full_write(
         stream,
         &buffer[..HED_OUT_SIZE + count as usize * MSG_OUT_SIZE],
-        // &[&buffer, msgs.as_slice()].concat(),
         "Failed to send messages in SMRT",
     )
 }

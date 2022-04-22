@@ -137,6 +137,8 @@ main = function() {
     if (chat_id_byte != chat_id_hash[0]) {set_status(0); return;}
     if (message_count*message_byte_size != bytes.length) {set_status(0);return}
     
+    if (message_count === 0) {set_status(0); return;}
+
     if (build_upwards) {
       max_message_id = Math.max(max_message_id, message_id + message_count-1);
       min_message_id = message_id;
