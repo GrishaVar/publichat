@@ -1,11 +1,8 @@
 use std::{fmt, time::Duration};
 
-use aes::{Aes256, cipher::{KeyIvInit, StreamCipher}};
-use ctr::Ctr128BE;
-
 use publichat::constants::*;
 
-type AesCtr = Ctr128BE<Aes256>;
+use crate::crypt::apply_aes;
 
 #[derive(Debug)]
 pub struct Message {
@@ -25,12 +22,8 @@ impl Message {
         let user: Rsa = bytes[MSG_OUT_RSA..][..RSA_SIZE].try_into().unwrap();
         let mut cypher: Contents = bytes[MSG_OUT_CYPHER..][..CYPHER_SIZE].try_into().unwrap();
 
-        let mut iv = [0u8; 16];
-        iv[15] = 1;
-
         // decrypt chat in-place
-        let mut decrypter = AesCtr::new(aes_key.into(), &iv.into());
-        decrypter.apply_keystream(&mut cypher);
+        apply_aes(aes_key, &mut cypher);
 
         // find padding end
         let length = CYPHER_SIZE as u8 - cypher[CYPHER_SIZE-1];

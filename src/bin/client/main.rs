@@ -5,88 +5,22 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 
-use sha3::{Sha3_256, Digest};
-
 use publichat::helpers::*;
 use publichat::constants::*;
 
 mod msg;
 use msg::Message;
 
-fn send_msg(
-    stream: &mut TcpStream,
-    chat: &Hash,
-    user: &Hash,
-    cypher: &Contents,
-) -> Res {
-    // TODO: rename constants to something direction-agnostic
-    let mut buf = [0; PADDING_SIZE + MSG_IN_SIZE + PADDING_SIZE];
+mod crypt;
+mod comm;
 
-    buf[..PADDING_SIZE].copy_from_slice(&SEND_PADDING);  // TODO: make padding const?
-    buf[PADDING_SIZE+MSG_IN_CHAT_ID..][..CHAT_ID_SIZE].copy_from_slice(chat);
-    buf[PADDING_SIZE+MSG_IN_RSA..][..HASH_SIZE].copy_from_slice(user);
-    buf[PADDING_SIZE+MSG_IN_CYPHER..][..CYPHER_SIZE].copy_from_slice(cypher);
-    buf[PADDING_SIZE+MSG_IN_SIZE..][..PADDING_SIZE].copy_from_slice(&END_PADDING);
-
-    full_write(stream, &buf, "Failed to send message")
-}
-
-fn fetch_msgs(
-    stream: &mut TcpStream,
-    chat: &Hash,
-) -> Res {
-    // Send fetch request
-    let mut send_buf = [0; PADDING_SIZE + FCH_SIZE + PADDING_SIZE];
-
-    send_buf[..PADDING_SIZE].copy_from_slice(&FETCH_PADDING);
-    send_buf[PADDING_SIZE+FCH_CHAT_ID..][..CHAT_ID_SIZE].copy_from_slice(chat);
-
-    full_write(stream, &send_buf, "Failed to send fetch")?;
-
-    // receive response  TODO: receive everything in different thread, like in js?
-    let mut recv_header_buf = [0; HED_OUT_SIZE];
-    read_exact(stream, &mut recv_header_buf, "Failed to read fetch response header")?;
-
-    if recv_header_buf[..PADDING_SIZE] != *b"msg" {
-        return Err("Fetch failed: incorrect padding received from server");
-    }
-
-    if recv_header_buf[HED_OUT_CHAT_ID_BYTE] != chat[0] {
-        return Err("Fetch failed: got data from wrong chat");  // TODO: thread!!
-    }
-
-    // let mut msg = 
-    // println!("got some data\n{:?}", )
-
-    todo!()
-}
-
-fn query_msgs() {}
-
-fn hash_twice(title: &[u8]) -> (Hash, Hash) {
-    let mut once = [0; HASH_SIZE];
-    let mut twice = [0; HASH_SIZE];
-
-    // hash once
-    let mut hasher = Sha3_256::new();
-    hasher.update(title);
-    once.copy_from_slice(&hasher.finalize());
-
-    // hash twice
-    let mut hasher = Sha3_256::new();
-    hasher.update(once);
-    twice.copy_from_slice(&hasher.finalize());
-
-    // TODO: do hashes in a loop? zip source and dest? Might be overkill...
-    (once, twice)
-}
 
 fn parse_header(header: &[u8; HED_OUT_SIZE]) -> Result<(u8, u32, u8, bool), &'static str> {
     // returns (chat id byte, message id, message count, forward)
     if header[..PADDING_SIZE] == MSG_PADDING {
         Ok((
-            header[HED_OUT_CHAT_ID_BYTE],
-            u32::from_be_bytes(header[HED_OUT_MSG_ID..][..QUERY_ARG_SIZE].try_into().unwrap()),
+            header[HED_OUT_CHAT_ID_BYTE],  // TODO: poorly named consts here...
+            u32::from_be_bytes(header[HED_OUT_CHAT_ID_BYTE..][..QUERY_ARG_SIZE].try_into().unwrap()) & 0x00_ff_ff_ff,
             header[HED_OUT_MSG_COUNT] & 0b0111_1111,  // can't fail unless consts wrong ^
             header[HED_OUT_MSG_COUNT] & 0b1000_0000 > 0,
         ))
@@ -100,14 +34,7 @@ struct GlobalState {
     chat_key: Hash,
     chat_id: Hash,
     min_id: u32,
-    max_id: u32,
-}
-
-fn clear_stream(stream: &mut TcpStream, n: usize) -> Res {
-    // clear n messages from stream
-    // todo: how to clear without allocating?
-    let mut buf = vec![0; n * MSG_OUT_SIZE];
-    read_exact(stream, &mut buf, "Failed to clear stream")
+    max_id: u32,  // inclusive
 }
 
 fn listener(
@@ -120,56 +47,56 @@ fn listener(
         // TODO: what should happen when this fails?
         // I guess thread closes and require reconnect
         
-        let (chat, id, count, forward) = parse_header(&hed_buf)?;
-        let last_id = id + count as u32;
-        let mut state = state.lock().map_err(|_| "Failed to lock state")?;
+        let (chat, first_id, count, forward) = parse_header(&hed_buf)?;
+        if count == 0 { continue }  // skip no messages
 
-        if chat != state.chat_id[0] || count == 0{
-            // skip old data and empty packets
-            clear_stream(&mut stream, count as usize)?;
-            continue;
-        }
+        // read messages expected from header
+        let mut buf = vec![0; count as usize * MSG_OUT_SIZE];  // TODO: consider array
+        read_exact(&mut stream, &mut buf, "Failed to bulk read fetch")?;
 
-        if state.min_id > state.max_id {  // fetch
-            // handle fetch separately; skip all checks
-            let mut buf = vec![0; count as usize * MSG_OUT_SIZE];
-            read_exact(&mut stream, &mut buf, "Failed to bulk read fetch")?;
+        let mut s = state.lock().map_err(|_| "Failed to lock state")?;
+        if chat != s.chat_id[0] { continue }  // skip wrong chat
+
+        let last_id = first_id + count as u32 - 1;  // inclusive. Can't undeflow
+
+        if s.min_id > s.max_id {  // initial fetch
+            // handle initial fetch separately; skip all checks
             for msg in buf.chunks_exact(MSG_OUT_SIZE) {
-                let msg = Message::new(msg.try_into().unwrap(), &state.chat_key)?;
+                let msg = Message::new(msg.try_into().unwrap(), &s.chat_key)?;
                 println!("{}", msg);
-                state.queue.push_back(msg);
+                s.queue.push_back(msg);
             }
-            state.min_id = id;
-            state.max_id = id + count as u32 - 1;
-        } else {
-            clear_stream(&mut stream, count as usize)?;
-            continue;
+            s.min_id = first_id;
+            s.max_id = last_id;
+            continue;  // initial fetch finished, move to next packet
         }
 
-        // if state.min_id <= state.max_id {
-        //     // skip all checks on initial fetch. min/max initialised swapped
-        //     if 
-        // }
+        if s.max_id + 1 < first_id ||  // disconnected ahead
+           s.min_id > last_id + 1 ||  // disconnected behind
+           (s.min_id <= first_id && last_id <= s.max_id) ||  // already have this
+           (first_id < s.min_id && s.max_id < last_id)  // overflow on both sides
+        { continue }  // skip all these
 
-        // if id > state.max_id + 1 || last_id < state.min_id {continue}  // data not connected
-
-
-        // if state.queue.is_empty() != (id == 0) {continue}  // skip non-zero for empty chat
-        // if forward && id > 0 && state.max_id > id - 1 {continue}
-
-
-        // if forward && id != 0 && queue.back().unwrap().msg_id != id - 1 {continue}
-        // if !forward && queue.front().unwrap().msg_id != id + count as u32 {continue}
-        // // TODO: use Option::contains when it's stable ^
-
-        // let mut msgs = vec![0; count as usize * MSG_OUT_SIZE];
-        // read_exact(&mut stream, &mut msgs, "Failed to bulk read messages")?;
-        // if forward {
-        //     for i in 0..count as usize {
-        //         msg_buf.copy_from_slice(&msgs[i*MSG_OUT_SIZE..][..MSG_OUT_SIZE]);
-        //         Message::new(msg_buf, &cur_chat)?;
-        //     }
-        // }
+        if forward {
+            if last_id > s.max_id {  // good proper data here
+                let i = if first_id <= s.max_id {s.max_id-first_id+1} else {0};
+                assert_eq!(s.max_id + 1, first_id + i);
+                for msg in buf.chunks_exact(MSG_OUT_SIZE).skip(i as usize) {
+                    let msg = Message::new(msg.try_into().unwrap(), &s.chat_key)?;
+                    println!("{}", msg);
+                    s.queue.push_back(msg);
+                }
+                // buf.chunks_exact(MSG_OUT_SIZE)
+                //     .skip(i as usize)
+                //     .map(|msg| Message::new(msg.try_into().unwrap(), &s.chat_key)?)
+                //     .for_each(|msg| s.queue.push_back(msg));
+                s.max_id = last_id;
+            } else {  // points forwards but behind our data
+                continue;
+            }
+        } else {  // not forwards (for scrolling up)
+            todo!()
+        }
     }
 }
 
@@ -198,9 +125,9 @@ fn main() {
     });
 
 
-    let mut cur_user = b"tui guy                         ";
-    let mut cur_chat = b"12";
-    let (chat_key, chat_id) = hash_twice(cur_chat);
+    let user = b"tui guy                         ";
+    let chat = b"12";
+    let (chat_key, chat_id) = crypt::hash_twice(chat);
     let queue = VecDeque::with_capacity(500);
     let state = GlobalState {
         queue,
@@ -223,34 +150,19 @@ fn main() {
         }
     });
 
-
-    let msg = b"\
-    12345678\
-    12345678\
-    12345678\
-    12345678\
-    12345678\
-    12345678\
-    12345678\
-    12345678\
-    12345678\
-    12345678\
-    12345678\
-    12345678\
-    12345678\
-    12345678\
-    12345678\
-    12345678";
-
-    // send_msg(&mut stream, &chat_hash_2, cur_user, msg);
-
-    loop {
-        full_write(
-            &mut stream,
-            &[&b"fch"[..], &chat_id[..], &b"end"[..]].concat(),
-            "failed to write",
-        );
+    while state.lock().unwrap().queue.is_empty() {
+        comm::send_fetch(&mut stream, &chat_id);
         thread::sleep_ms(1000);
+    }
+    loop {
+        comm::send_query(
+            &mut stream,
+            &chat_id,
+            true,
+            50,
+            state.lock().unwrap().max_id,
+        );
+        thread::sleep_ms(200);
     }
 
 }
