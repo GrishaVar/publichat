@@ -91,7 +91,7 @@ pub const FCH_SIZE: usize           = FCH_CHAT_ID + CHAT_ID_SIZE;
 pub const QRY_CHAT_ID: usize        = 0;
 pub const QRY_ARGS: usize           = QRY_CHAT_ID + CHAT_ID_SIZE;  // direction and amount
 pub const QRY_MSG_ID: usize         = QRY_ARGS + 1;  // 3 bytes msg ID (ARGS is 1 byte)
-pub const QRY_SIZE: usize           = QRY_MSG_ID;
+pub const QRY_SIZE: usize           = QRY_MSG_ID + MSG_ID_SIZE;
 
 /*
 // Sizes of incomming fetch packets
