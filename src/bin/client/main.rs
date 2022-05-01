@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::io::Write;
 use std::net::TcpStream;
+use std::net::ToSocketAddrs;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
@@ -103,17 +104,43 @@ fn listener(
 fn main() {
     println!("Starting client...");
 
+    let mut args = std::env::args().skip(1).collect::<Vec<_>>();
+
     let server_addr = {
-        let args: Vec<String> = std::env::args().skip(1).collect();
-        if let Some(addr) = args.last() {
-            addr.to_owned()
-        } else {
+        let addr = args.get(0).unwrap_or_else(|| {
             println!("No address given");
-            std::process::exit(1);
+            std::process::exit(1);  // TODO figure out nice way to return codes
+        });
+
+        match addr.to_socket_addrs() {
+            Err(e) => {
+                println!("Given address is not a valid socket address: {e}\n\t{addr}");
+                std::process::exit(2);
+            },
+            Ok(mut a) => match a.next() {
+                None => {
+                    println!("Recieved 0 addresses?");
+                    std::process::exit(2);
+                },
+                Some(a) => a,
+            }
         }
     };
-    println!("Connecting to server {}...", server_addr);
-    let mut stream = TcpStream::connect(&server_addr).unwrap_or_else(|e| {
+
+    let chat = std::mem::take(args.get_mut(1).unwrap_or_else(|| {
+        // TODO: chat could be non-utf8. Allow input from file?
+        println!("No chat title given");
+        std::process::exit(2);
+    }));
+    let (chat_key, chat_id) = crypt::hash_twice(chat.as_bytes());
+
+    let user = std::mem::take(args.get_mut(2).unwrap_or_else(|| {
+        println!("No username given");
+        std::process::exit(3);
+    }));
+
+    println!("Connecting to server {:?}...", server_addr);
+    let mut stream = TcpStream::connect(server_addr).unwrap_or_else(|e| {
         println!("Failed to connect to to server: {}", e);
         std::process::exit(2);
     });
@@ -124,10 +151,6 @@ fn main() {
         std::process::exit(3);
     });
 
-
-    let user = b"tui guy                         ";
-    let chat = b"12";
-    let (chat_key, chat_id) = crypt::hash_twice(chat);
     let queue = VecDeque::with_capacity(500);
     let state = GlobalState {
         queue,
