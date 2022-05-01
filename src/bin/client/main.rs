@@ -3,7 +3,6 @@ use std::error::Error;
 use std::io::Write;
 use std::net::TcpStream;
 use std::net::ToSocketAddrs;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
@@ -104,55 +103,25 @@ fn listener(
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>>{
+fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
     println!("Starting client...");
 
     let mut args = std::env::args().skip(1).collect::<Vec<_>>();
 
-    let server_addr = {
-        let addr = args.get(0).unwrap_or_else(|| {
-            println!("No address given");
-            std::process::exit(1);  // TODO figure out nice way to return codes
-        });
+    let server_addr = args.get(0).ok_or("No addr given")?
+        .to_socket_addrs()?
+        .next().ok_or("Zero addrs received?")?;
 
-        match addr.to_socket_addrs() {
-            Err(e) => {
-                println!("Given address is not a valid socket address: {e}\n\t{addr}");
-                std::process::exit(2);
-            },
-            Ok(mut a) => match a.next() {
-                None => {
-                    println!("Recieved 0 addresses?");
-                    std::process::exit(2);
-                },
-                Some(a) => a,
-            }
-        }
-    };
-
-    let chat = std::mem::take(args.get_mut(1).unwrap_or_else(|| {
-        // TODO: chat could be non-utf8. Allow input from file?
-        println!("No chat title given");
-        std::process::exit(2);
-    }));
+    let chat = std::mem::take(args.get_mut(1).ok_or("No title given")?);
     let (chat_key, chat_id) = crypt::hash_twice(chat.as_bytes());
 
-    let user = std::mem::take(args.get_mut(2).unwrap_or_else(|| {
-        println!("No username given");
-        std::process::exit(3);
-    }));
+    let user = std::mem::take(args.get_mut(2).ok_or("No username given")?);
 
     println!("Connecting to server {:?}...", server_addr);
-    let mut stream = TcpStream::connect(server_addr).unwrap_or_else(|e| {
-        println!("Failed to connect to to server: {}", e);
-        std::process::exit(2);
-    });
+    let mut stream = TcpStream::connect(server_addr)?;
     println!("Connected!");
 
-    stream.write_all(b"SMRT").unwrap_or_else(|e| {
-        println!("Failed to write SMRT header: {}", e);
-        std::process::exit(3);
-    });
+    stream.write_all(b"SMRT")?;
 
     let queue = VecDeque::with_capacity(500);
     let state = GlobalState {
@@ -165,14 +134,13 @@ fn main() -> Result<(), Box<dyn Error>>{
     let state = Arc::new(Mutex::new(state));
 
     // start listener thread
-    let stream2 = stream.try_clone().map_err(|_| "Failed to clone stream").unwrap();
+    let stream2 = stream.try_clone()?;
     let state2 = state.clone();
     thread::spawn(|| {
         println!("Starting listener thread.");
-        if let Err(e) = listener(stream2, state2) {
-            println!("Listener thread crashed: {}", e);
-        } else {
-            println!("Listener thread finished");
+        match listener(stream2, state2) {
+            Err(e) => println!("Listener thread crashed: {}", e),
+            Ok(_)        => println!("Listener thread finished"),
         }
     });
 
