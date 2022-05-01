@@ -1,7 +1,9 @@
 use std::collections::VecDeque;
+use std::error::Error;
 use std::io::Write;
 use std::net::TcpStream;
 use std::net::ToSocketAddrs;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
@@ -15,6 +17,7 @@ use msg::Message;
 mod crypt;
 mod comm;
 
+const FQ_DELAY: std::time::Duration = std::time::Duration::from_millis(200);
 
 fn parse_header(header: &[u8; HED_OUT_SIZE]) -> Result<(u8, u32, u8, bool), &'static str> {
     // returns (chat id byte, message id, message count, forward)
@@ -101,7 +104,7 @@ fn listener(
     }
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>>{
     println!("Starting client...");
 
     let mut args = std::env::args().skip(1).collect::<Vec<_>>();
@@ -174,8 +177,8 @@ fn main() {
     });
 
     while state.lock().unwrap().queue.is_empty() {
-        comm::send_fetch(&mut stream, &chat_id);
-        thread::sleep_ms(1000);
+        comm::send_fetch(&mut stream, &chat_id)?;
+        thread::sleep(FQ_DELAY);
     }
     loop {
         comm::send_query(
@@ -184,8 +187,7 @@ fn main() {
             true,
             50,
             state.lock().unwrap().max_id,
-        );
-        thread::sleep_ms(200);
+        )?;
+        thread::sleep(FQ_DELAY);
     }
-
 }
