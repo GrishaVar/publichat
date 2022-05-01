@@ -139,8 +139,8 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
     thread::spawn(|| {
         println!("Starting listener thread.");
         match listener(stream2, state2) {
+            Ok(_) => println!("Listener thread finished"),
             Err(e) => println!("Listener thread crashed: {}", e),
-            Ok(_)        => println!("Listener thread finished"),
         }
     });
 

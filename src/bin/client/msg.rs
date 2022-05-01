@@ -28,6 +28,10 @@ impl Message {
         // find padding end
         let length = CYPHER_SIZE as u8 - cypher[CYPHER_SIZE-1];
 
+        // assign varified randomly
+        // TODO: update when signatures come around
+        let verified = time & 255 > 255/10;  // approx 90% are verified
+
         // assert utf8
         if std::str::from_utf8(&cypher[..length as usize]).is_ok() {
             Ok(Self {
@@ -35,7 +39,7 @@ impl Message {
                 user,
                 text: cypher,
                 length,
-                verified: true,  // TODO: update when signatures come around
+                verified,
             })
         } else {
             Err("Non-utf8 message")
