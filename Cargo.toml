@@ -8,3 +8,10 @@ edition = "2021"
 [dependencies]
 base64 = "0.13.0"
 sha1_smol = "1.0.0"
+
+[build-dependencies]
+minify-html = { version = "0.8.0", features = ["js-esbuild"], optional = true }
+
+[features]
+minify = ["minify-html"]
+tls = []

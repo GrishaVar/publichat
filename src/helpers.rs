@@ -20,8 +20,37 @@ pub struct Globals {  // owns all its data!
     pub git_hash:    [u8; 40],
 }
 
-pub const FILE_INDEX_HTML:  &[u8] = include_bytes!("../page/index.html");
-pub const FILE_MOBILE_HTML: &[u8] = include_bytes!("../page/mobile.html");
-pub const FILE_404_HTML:    &[u8] = include_bytes!("../page/404.html");
-pub const FILE_CLIENT_JS:   &[u8] = include_bytes!("../page/client.js");
 pub const FILE_FAVICON_ICO: &[u8] = include_bytes!("../page/favicon.ico");
+
+// I believe there is no nice way of doing this
+// no minify, no tls
+#[cfg(all(not(feature = "minify"), not(feature = "tls")))]
+pub const FILE_INDEX_HTML:  &[u8] = include_bytes!("../target/index.html");
+#[cfg(all(not(feature = "minify"), not(feature = "tls")))]
+pub const FILE_MOBILE_HTML: &[u8] = include_bytes!("../target/mobile.html");
+#[cfg(all(not(feature = "minify"), not(feature = "tls")))]
+pub const FILE_404_HTML:    &[u8] = include_bytes!("../target/404.html");
+
+// only tls
+#[cfg(all(not(feature = "minify"), feature = "tls"))]
+pub const FILE_INDEX_HTML:  &[u8] = include_bytes!("../target/index-tls.html");
+#[cfg(all(not(feature = "minify"), feature = "tls"))]
+pub const FILE_MOBILE_HTML: &[u8] = include_bytes!("../target/mobile-tls.html");
+#[cfg(all(not(feature = "minify"), feature = "tls"))]
+pub const FILE_404_HTML:    &[u8] = include_bytes!("../target/404.html");
+
+// only minify
+#[cfg(all(feature = "minify", not(feature = "tls")))]
+pub const FILE_INDEX_HTML:  &[u8] = include_bytes!("../target/index.min.html");
+#[cfg(all(feature = "minify", not(feature = "tls")))]
+pub const FILE_MOBILE_HTML: &[u8] = include_bytes!("../target/mobile.min.html");
+#[cfg(all(feature = "minify", not(feature = "tls")))]
+pub const FILE_404_HTML:    &[u8] = include_bytes!("../target/404.min.html");
+
+// minify and tls
+#[cfg(all(feature = "minify", feature = "tls"))]
+pub const FILE_INDEX_HTML:  &[u8] = include_bytes!("../target/index-tls.min.html");
+#[cfg(all(feature = "minify", feature = "tls"))]
+pub const FILE_MOBILE_HTML: &[u8] = include_bytes!("../target/mobile-tls.min.html");
+#[cfg(all(feature = "minify", feature = "tls"))]
+pub const FILE_404_HTML:    &[u8] = include_bytes!("../target/404.min.html");
