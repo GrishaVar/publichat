@@ -79,8 +79,6 @@ pub fn handle(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
             .map_err(|_| "Failed to send index.html"),
         "/favicon.ico"   => send_data(200, FILE_FAVICON_ICO, &mut stream)
             .map_err(|_| "Failed to send favicon"),
-        "/client.js"     => send_data(200, FILE_CLIENT_JS, &mut stream)
-            .map_err(|_| "Failed to send client.js"),
         "/mobile" | "/m" => send_data(200, FILE_MOBILE_HTML, &mut stream)
             .map_err(|_| "Failed to send mobile.html"),
         "/ws"            => handle_ws(req, stream, globals),  // start WS
