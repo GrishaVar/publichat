@@ -6,11 +6,12 @@ use crate::crypt::apply_aes;
 
 #[derive(Debug)]
 pub struct Message {
-    time: Duration,
-    user: Hash,
-    text: Contents,
-    length: u8,
-    verified: bool,
+    // time: Duration,
+    // user: Hash,
+    // text: Contents,
+    // verified: bool,
+    pub length: u8,
+    cached_str_repr: String,  // TODO: duplicate storage?
 }
 
 impl Message {
@@ -31,35 +32,38 @@ impl Message {
         // assign varified randomly
         // TODO: update when signatures come around
         let verified = time & 255 > 255/10;  // approx 90% are verified
+        let time = Duration::from_millis(time);
 
         // assert utf8
-        if std::str::from_utf8(&cypher[..length as usize]).is_ok() {
-            Ok(Self {
-                time: Duration::from_millis(time),
-                user,
-                text: cypher,
-                length,
-                verified,
-            })
-        } else {
-            Err("Non-utf8 message")
+        if std::str::from_utf8(&cypher[..length as usize]).is_err() {
+            return Err("Non-utf8 message!")
         }
+
+        // build string
+        let cached_str_repr = {
+            let (v_start, v_end) = match verified {
+                true  => ("\x1B[32m✔\x1B[0m", ""),
+                false => ("\x1B[31m✗", "\x1B[0m"),
+            };
+            let user = &base64::encode(user)[..10];
+            let time = time.as_secs();
+            let msg = std::str::from_utf8(&cypher[..length as usize]).unwrap();
+            format!("{v_start} {user} @ {time}: {msg}{v_end}")
+        };
+
+        Ok(Self {
+            // time,
+            // user,
+            // text: cypher,
+            // verified,
+            length,
+            cached_str_repr,
+        })
     }
 }
 
 impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // TODO: consider caching?
-        let (v_start, v_end) = match self.verified {
-            true  => ("\x1B[32m✔\x1B[0m", ""),
-            false => ("\x1B[31m✗", "\x1B[0m"),
-        };
-        let user = &base64::encode(self.user)[..10];
-        let time = self.time.as_secs();
-        let msg = std::str::from_utf8(&self.text[..self.length as usize]).unwrap();
-        write!(
-            f,
-            "{v_start} {user} @ {time}: {msg}{v_end}",
-        )
+        write!(f, "{}", self.cached_str_repr)
     }
 }
