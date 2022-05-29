@@ -10,3 +10,4 @@ base64 = "0.13.0"
 ctr = "0.9.1"
 sha1_smol = "1.0.0"
 sha3 = "0.10.1"
+crossterm = "0.23.2"  # TODO: optional for client only?
