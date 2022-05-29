@@ -170,13 +170,15 @@ fn drawer(
         let coloured_line = style(" ".repeat(size.0 as usize))
             .on(Color::Rgb { r: 0x66, g: 0x00, b: 0x66 });
 
-        write!(stdout, "\r\n")?;
+        // write!(stdout, "\r\n")?;
+        stdout.queue(cursor::MoveToNextLine(1))?;
         stdout.queue(PrintStyledContent(coloured_line.clone()))?;
-
 
         stdout.queue(cursor::MoveTo(0, size.1 - 2))?;
         stdout.queue(PrintStyledContent(coloured_line))?;
-        write!(stdout, "\r\nSend: ")?;
+        stdout.queue(cursor::MoveToNextLine(1))?;
+        stdout.queue(PrintStyledContent(style('>').rapid_blink()))?;
+        // write!(stdout, "\r\n> ")?;
 
         stdout.flush()
     }
@@ -239,9 +241,23 @@ fn drawer(
         stdout.flush()
     }
 
+    fn update_text(text: &str) -> crossterm::Result<()> {
+        // TODO: account for max msg length! here or there?
+        let mut stdout = std::io::stdout();
+        let height = terminal::size()?.1;
+        stdout.queue(cursor::MoveTo(0, height-1))?;
+        stdout.queue(terminal::Clear(ClearType::CurrentLine))?;  // del line only
+        let blinker = style('>')
+            .bold()
+            .rapid_blink();
+        stdout.queue(PrintStyledContent(blinker))?;
+        write!(stdout, " {}", text)?;
+        stdout.flush()
+    }
+
     // let mut cur_size = (0, 0);
     // let mut cur_pos = ViewPos::Last;  // TODO: should start with this
-    let mut cur_pos = ViewPos::Index{msg_id: 0, chr_id: 0 };
+    let mut cur_pos = ViewPos::Index{msg_id: 0, chr_id: 0};
 
     // draw first frame manually
     let mut cur_size = size()?;
@@ -263,10 +279,22 @@ fn drawer(
                     match (modifiers, code) {
                         (Mod::CONTROL, Char('c')) => break,
                         (Mod::NONE, Esc) => break,
-                        (Mod::NONE, Char(c)) => disp_str.push(c),  // type c in msg
-                        (Mod::SHIFT, Char(c)) => disp_str.push(c.to_ascii_uppercase()),  // type cap c in msg
-                        (Mod::NONE, Enter) => {msg_tx.send(mem::take(&mut disp_str));},  // send message
-                        (Mod::NONE, Backspace) => {disp_str.pop();},  // remove char
+                        (Mod::NONE, Char(c)) => {
+                            disp_str.push(c);
+                            update_text(&disp_str)?;
+                        },  // type c in msg
+                        (Mod::SHIFT, Char(c)) => {
+                            disp_str.push(c.to_ascii_uppercase());
+                            update_text(&disp_str)?;
+                        },  // type cap c in msg
+                        (Mod::NONE, Enter) => {
+                            msg_tx.send(mem::take(&mut disp_str));
+                            update_text("")?;
+                        },  // send message
+                        (Mod::NONE, Backspace) => {
+                            disp_str.pop();
+                            update_text(&disp_str)?;
+                        },  // remove char
                         (Mod::CONTROL, Backspace) => {}  // remove word
                         (Mod::NONE, Delete) => {}  // remove char
                         (Mod::CONTROL, Delete) => {}  // remove word
