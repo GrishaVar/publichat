@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
+use std::mem;
 
 use crossterm::ExecutableCommand;
 use crossterm::event;
@@ -51,6 +52,7 @@ struct GlobalState {
     queue: VecDeque<Message>,
     chat_key: Hash,
     chat_id: Hash,
+    user_id: Hash,
     min_id: u32,
     max_id: u32,  // inclusive
 }
@@ -115,7 +117,10 @@ fn listener(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
     }
 }
 
-fn drawer(state: Arc<Mutex<GlobalState>>) -> crossterm::Result<()> {
+fn drawer(
+    state: Arc<Mutex<GlobalState>>,
+    msg_tx: std::sync::mpsc::Sender<String>,
+)-> crossterm::Result<()> {
     use crossterm::{
         QueueableCommand,
         cursor,
@@ -238,27 +243,13 @@ fn drawer(state: Arc<Mutex<GlobalState>>) -> crossterm::Result<()> {
     // let mut cur_pos = ViewPos::Last;  // TODO: should start with this
     let mut cur_pos = ViewPos::Index{msg_id: 0, chr_id: 0 };
 
-    /* loop {
-        let s = terminal::size()?;
-        if s != cur_size {  // size changed, change with it
-            if s.1 < 5 { break }  // height must allow top 2, bottom 2 and middle rows
-
-            handle_resize(s)?;
-            cur_size = s;
-
-            print_all_messages(&cur_pos, &cur_size, &state)?;
-        }
-
-
-        if s.0 > 200 {break}
-        thread::sleep(_DISP_DELAY);  // todo: adjust from last for true fps
-    } */
-
     // draw first frame manually
     let mut cur_size = size()?;
     stdout.execute(Clear(ClearType::All))?;
     handle_resize(cur_size)?;
     print_all_messages(&cur_pos, &cur_size, &state)?;
+
+    let mut disp_str = String::with_capacity(50);
 
     // mainloop
     loop {
@@ -272,10 +263,10 @@ fn drawer(state: Arc<Mutex<GlobalState>>) -> crossterm::Result<()> {
                     match (modifiers, code) {
                         (Mod::CONTROL, Char('c')) => break,
                         (Mod::NONE, Esc) => break,
-                        (Mod::NONE, Char(c)) => {},  // type c in msg
-                        (Mod::SHIFT, Char(c)) => {},  // type cap c in msg
-                        (Mod::NONE, Enter) => {},  // send message
-                        (Mod::NONE, Backspace) => {}  // remove char
+                        (Mod::NONE, Char(c)) => disp_str.push(c),  // type c in msg
+                        (Mod::SHIFT, Char(c)) => disp_str.push(c.to_ascii_uppercase()),  // type cap c in msg
+                        (Mod::NONE, Enter) => {msg_tx.send(mem::take(&mut disp_str));},  // send message
+                        (Mod::NONE, Backspace) => {disp_str.pop();},  // remove char
                         (Mod::CONTROL, Backspace) => {}  // remove word
                         (Mod::NONE, Delete) => {}  // remove char
                         (Mod::CONTROL, Delete) => {}  // remove word
@@ -313,10 +304,21 @@ fn drawer(state: Arc<Mutex<GlobalState>>) -> crossterm::Result<()> {
     Ok(())
 }
 
-fn requester(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
+fn requester(
+    mut stream: TcpStream,
+    state: Arc<Mutex<GlobalState>>,
+    msg_rx: std::sync::mpsc::Receiver<String>,
+) -> Res {
+    let user_id = state.lock().map_err(|_| "Failed to lock state")?.user_id;
     let chat_id = state.lock().map_err(|_| "Failed to lock state")?.chat_id;
+    let chat_key = state.lock().map_err(|_| "Failed to lock state")?.chat_key;
+    let mut cypher_buf = [0; CYPHER_SIZE];
     while state.lock().map_err(|_| "Failed to lock state")?.queue.is_empty() {
         comm::send_fetch(&mut stream, &chat_id)?;
+        if let Ok(msg) = msg_rx.try_recv() {
+            cypher_buf = Message::make_cypher(&msg, &chat_key).unwrap();  // TODO: unwrap
+            comm::send_msg(&mut stream, &chat_id, &user_id, &cypher_buf)?;
+        }
         thread::sleep(FQ_DELAY);
     }
     loop {
@@ -327,6 +329,10 @@ fn requester(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
             50,
             state.lock().unwrap().max_id,
         )?;
+        if let Ok(msg) = msg_rx.try_recv() {
+            cypher_buf = Message::make_cypher(&msg, &chat_key).unwrap();  // TODO: unwrap
+            comm::send_msg(&mut stream, &chat_id, &user_id, &cypher_buf)?;
+        }
         thread::sleep(FQ_DELAY);
     }
 }
@@ -341,10 +347,11 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
         .to_socket_addrs()?
         .next().ok_or("Zero addrs received?")?;
 
-    let chat = std::mem::take(args.get_mut(1).ok_or("No title given")?);
+    let chat = mem::take(args.get_mut(1).ok_or("No title given")?);
     let (chat_key, chat_id) = crypt::hash_twice(chat.as_bytes());
 
-    let user = std::mem::take(args.get_mut(2).ok_or("No username given")?);
+    let user = mem::take(args.get_mut(2).ok_or("No username given")?);
+    let user_id = crypt::hash(user.as_bytes());
 
     println!("Connecting to server {:?}...", server_addr);
     let mut stream = TcpStream::connect(server_addr)?;
@@ -357,10 +364,13 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
         queue,
         chat_key,
         chat_id,
+        user_id,
         min_id: 1,
         max_id: 0,
     };
     let state = Arc::new(Mutex::new(state));
+
+    let (rx, tx) = std::sync::mpsc::channel::<String>();
 
     // start listener thread
     let stream2 = stream.try_clone()?;
@@ -377,7 +387,7 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
     let state3 = state.clone();
     thread::spawn(|| {
         println!("Starting drawer thread.");
-        match drawer(state3) {
+        match drawer(state3, rx) {  // drawer recieves text input and send to requester
             Ok(_) => println!("Drawer thread finished"),
             Err(e) => println!("Drawer thread crashed: {e}"),
             // TODO: end process if one thread crashes?
@@ -386,7 +396,7 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
 
     // main thread is requester thread
     println!("Starting requests");
-    match requester(stream, state) {
+    match requester(stream, state, tx) {  // requester sends messages from tx to server
         Ok(_) => println!("Request loop finished"),
         Err(e) => println!("Request loop crashed: {e}"),
     };

@@ -60,6 +60,22 @@ impl Message {
             cached_str_repr,
         })
     }
+
+    pub fn make_cypher(text: &str, chat_key: &Hash) -> Result<Contents, ()> {
+        let mut res = [0; CYPHER_SIZE];
+        if text.len() > CYPHER_SIZE - 1 { return Err(()) }  // msg too long
+
+        // padding
+        let pad_chr = CYPHER_SIZE - text.len();
+        let pad_chr = u8::try_from(pad_chr).unwrap();  // TODO: remove unwrap
+        res[..text.len()].copy_from_slice(text.as_bytes());
+        res[text.len()..].fill(pad_chr);
+
+        // AES
+        apply_aes(chat_key, &mut res);
+
+        Ok(res)
+    }
 }
 
 impl fmt::Display for Message {
