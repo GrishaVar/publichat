@@ -1,8 +1,8 @@
 main = function() {
   var max_message_id = Number.MIN_SAFE_INTEGER;
   var min_message_id = Number.MAX_SAFE_INTEGER;
-  var message_byte_size = 168;
-  var message_content_lenght = 128;
+  var message_byte_size = 512;
+  var message_content_lenght = 396;
   var fch_pad = [102,  99, 104];  // "fch"
   var qry_pad = [113, 114, 121];  // "qry"
   var snd_pad = [115, 110, 100];  // "snd"
