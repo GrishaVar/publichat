@@ -357,6 +357,12 @@ fn drawer(
                         (Mod::NONE, PageDown) => {}  // scroll way down
                         (Mod::NONE, Home) => {}  // scroll way way up
                         (Mod::NONE, End) => {}  // scroll way way down
+                        (Mod::CONTROL, Char('r')) => {  // redraw everything
+                            stdout.execute(terminal::Clear(ClearType::All))?;
+                            draw_header(cur_size)?;
+                            draw_messages(&cur_pos, cur_size, &state)?;
+                            draw_footer(&disp_str)?;
+                        }
                         _ => continue,
                     }
                 },
