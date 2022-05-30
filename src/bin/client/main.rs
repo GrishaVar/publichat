@@ -5,28 +5,22 @@ use std::net::TcpStream;
 use std::net::ToSocketAddrs;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
-use std::time::Duration;
 use std::mem;
-use std::time;
 
-use crossterm::ExecutableCommand;
-use crossterm::event;
-use crossterm::event::Event;
-use crossterm::event::KeyEvent;
-use crossterm::style::Stylize;
-use crossterm::terminal::Clear;
 use publichat::helpers::*;
 use publichat::constants::*;
 
 mod msg;
 use msg::Message;
 
+mod common;
+use common::*;
+
+mod display;
+use display::Display;
+
 mod crypt;
 mod comm;
-
-const FQ_DELAY: Duration = Duration::from_millis(200);
-const DISP_FPS: u64 = 1;
-const _DISP_DELAY: Duration = Duration::from_millis(1000 / DISP_FPS);
 
 fn parse_header(header: &[u8; HED_OUT_SIZE]) -> Result<(u8, u32, u8, bool), &'static str> {
     // returns (chat id byte, message id, message count, forward)
@@ -43,14 +37,6 @@ fn parse_header(header: &[u8; HED_OUT_SIZE]) -> Result<(u8, u32, u8, bool), &'st
     }
 }
 
-struct GlobalState {
-    queue: VecDeque<Message>,
-    chat_key: Hash,
-    chat_id: Hash,
-    user_id: Hash,
-    min_id: u32,
-    max_id: u32,  // inclusive
-}
 
 fn listener(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
     let mut hed_buf = [0; HED_OUT_SIZE];
@@ -112,300 +98,6 @@ fn listener(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
     }
 }
 
-fn drawer(
-    state: Arc<Mutex<GlobalState>>,
-    msg_tx: mpsc::Sender<String>,
-)-> crossterm::Result<()> {
-    use crossterm::{
-        QueueableCommand,
-        cursor,
-        terminal::{
-            self,
-            ClearType,
-            EnterAlternateScreen,
-            LeaveAlternateScreen,
-        },
-        style::{
-            style,
-            SetAttribute,
-            Attribute,
-            PrintStyledContent,
-            StyledContent,
-            Color,
-        },
-        event::{
-            MouseEvent,
-        }
-    };
-
-    const BG_COLOUR: Color = Color::Rgb{r: 0xd0, g: 0xd0, b: 0xd0};
-    const FG_COLOUR: Color = Color::Rgb{r: 0x66, g: 0x00, b: 0x33};
-
-    enum ViewPos {
-        Last,  // "most recent message on bottom"
-        Index{msg_id: u16, chr_id: u8},  // id of TOP message, index of its first char
-    }
-
-    println!("Entering alternate screen...");
-    let mut stdout = std::io::stdout();
-    terminal::enable_raw_mode()?;
-    stdout.queue(event::EnableMouseCapture)?;
-    stdout.queue(EnterAlternateScreen)?;
-    stdout.queue(terminal::Clear(ClearType::All))?;
-    stdout.queue(cursor::DisableBlinking)?;
-    stdout.queue(cursor::Hide)?;
-    stdout.flush()?;
-
-    fn draw_header(size: (u16, u16)) -> crossterm::Result<()> {
-        let (w, h) = size;
-
-        let mut stdout = std::io::stdout();
-        stdout.queue(cursor::MoveTo(0, 0))?;
-
-        let chat_name = "ChatName";  // TODO: get chat name in here
-        let header_text = {
-            let title = format!("> PubliChat {chat_name} <");
-            let signs = "=".repeat((w as usize - title.len())/2);
-            let extra = if ((w as usize - title.len()) & 1)==1 {"="} else {""};
-            format!("{signs}{title}{signs}{extra}")
-        };
-        let header = style(header_text)
-            .with(FG_COLOUR)
-            .on(BG_COLOUR)
-            .attribute(Attribute::Bold);
-
-        stdout.queue(PrintStyledContent(header))?;
-
-        let coloured_line = style(" ".repeat(w as usize))
-            .on(FG_COLOUR);
-
-        stdout.queue(cursor::MoveToNextLine(1))?;
-        stdout.queue(PrintStyledContent(coloured_line))?;
-
-        stdout.flush()
-    }
-
-    fn draw_footer(cur_input: &str) -> crossterm::Result<()> {
-        // TODO: account for max msg length! here or there?
-        let mut stdout = std::io::stdout();
-        let (w, h) = terminal::size()?;
-
-        // draw purple separator
-        stdout.queue(cursor::MoveTo(0, h-2))?;
-        stdout.queue(PrintStyledContent(style(" ".repeat(w as usize)).on(FG_COLOUR)))?;
-
-        // draw current input text
-        stdout.queue(cursor::MoveToNextLine(1))?;
-        stdout.queue(terminal::Clear(ClearType::CurrentLine))?;  // del line only
-        let blinker = style("> ")
-            .bold()
-            .rapid_blink()
-            .with(FG_COLOUR)
-            .on(BG_COLOUR);
-        stdout.queue(PrintStyledContent(blinker))?;
-        let text = style(cur_input)
-            .with(FG_COLOUR)
-            .on(BG_COLOUR);
-        stdout.queue(PrintStyledContent(text))?;
-        let spaces = style(" ".repeat(w as usize - 2 - cur_input.len()))
-            .on(BG_COLOUR);
-        stdout.queue(PrintStyledContent(spaces))?;
-        stdout.flush()
-    }
-
-    fn draw_messages(
-        view: &ViewPos,
-        size: (u16, u16),
-        state: &Arc<Mutex<GlobalState>>,
-    ) -> crossterm::Result<()> {
-        // SIDE EFFECT: DELETES FOOTER!!!
-        let state = state.lock().unwrap();  // TODO get rid of this unwrap!!!
-        if state.queue.is_empty() {return Ok(())}
-
-        let mut stdout = std::io::stdout();
-
-        let (w, h) = size;
-        let mut remaining_lines = h - 4;  // two lines used on top, two on bottom
-
-        // TODO: find a way of changing backgroud nicely
-        // stdout.queue(SetForegroundColor(Color::Black))?;
-        // stdout.queue(SetBackgroundColor(Color::Grey))?;
-
-        // clear current screen  (THIS DELETES FOOTER!)
-        stdout.queue(cursor::MoveTo(0, 2))?;  // TODO: terminal too small?
-        stdout.queue(terminal::Clear(ClearType::FromCursorDown))?;
-
-        if state.queue.len() <= remaining_lines as usize &&
-            // it's possible all messages fit on the screen
-            // do more expensive check to see if it's true
-            state.queue.iter().map(|m| 1+(m.repr.len() as u16 / w)).sum::<u16>() < h
-        {
-            // if it is true, just print with no checks
-            for msg in state.queue.iter() {
-                write!(stdout, "{msg}\r\n")?;
-            }
-            return stdout.flush();
-        }
-        
-        // Not all messages fit on screen
-        match view {
-            ViewPos::Index { msg_id, chr_id } => {
-                // cursor already at right position, draw one msg at a time
-                // TODO: print start.msg partial
-                for msg in state.queue.range(1+usize::from(*msg_id)..) {
-                    if remaining_lines == 0 { break }
-
-                    let line_count = (msg.repr.len() as u16 / w) + 1;
-                    if let Some(res) = remaining_lines.checked_sub(line_count) {
-                        // normal situation, whole message fits on screen
-                        write!(stdout, "{msg}\r\n")?;
-                        remaining_lines = res;
-                    } else {
-                        let printable_chars = remaining_lines * size.0;
-                        write!(stdout, "{}", &msg.to_string()[..usize::from(printable_chars)])?;
-                        break;  // finished drawing
-                    }
-                }
-            }
-            ViewPos::Last => {
-                // draw from bottom up
-                stdout.queue(cursor::MoveTo(0, h-2))?;
-                for msg in state.queue.iter().rev() {
-                    if remaining_lines == 0 { break }
-                    let msg_height = (msg.repr.len() as u16 / w) + 1;
-                    if msg_height <= remaining_lines {  // message fits no problemo
-                        stdout.queue(cursor::MoveToPreviousLine(msg_height))?;
-                        write!(stdout, "{msg}")?;
-                        remaining_lines -= msg_height;
-                    } else {  // only bottom half of top msg fits
-                        // stdout.queue(cursor::MoveToPreviousLine(remaining_lines))?;
-                        
-                        stdout.queue(cursor::MoveTo(0, 2))?;
-                        let skipped_lines = msg_height - remaining_lines;
-                        write!(stdout, "{}", &msg.repr[(w*skipped_lines) as usize..])?;
-                        break;  // finished drawing
-                    }
-                }
-            }
-        }
-        stdout.flush()
-    }
-
-    let mut cur_pos = ViewPos::Last;  // TODO: should start with this
-    // let mut cur_pos = ViewPos::Index{msg_id: 0, chr_id: 0};
-    fn move_pos(pos: &mut ViewPos, up: bool) {
-        // positive is scolling up
-        *pos = match pos {
-            ViewPos::Last => ViewPos::Last,
-            ViewPos::Index{msg_id, chr_id} => if up {
-                ViewPos::Index{msg_id: *msg_id-1, chr_id: *chr_id}
-            } else {
-                // TODO: possible ViewPos::Last
-                ViewPos::Index{msg_id: *msg_id+1, chr_id: *chr_id}
-            },
-        };
-    }
-
-    // draw first frame manually
-    let mut cur_size = terminal::size()?;
-    stdout.execute(Clear(ClearType::All))?;
-    draw_header(cur_size)?;
-    draw_messages(&cur_pos, cur_size, &state)?;
-    draw_footer("")?;
-
-    let mut disp_str = String::with_capacity(50);
-
-    let mut last_update = std::time::UNIX_EPOCH;
-
-    // mainloop
-    loop {
-        // wait for events to come in. Update instantly if they do, otherwise
-        // update at defined FPS when a new message comes in.
-        match event::poll(_DISP_DELAY) {
-            Ok(true) => match event::read()? {
-                Event::Key(KeyEvent{code, modifiers}) => {
-                    use crossterm::event::KeyCode::*;
-                    use crossterm::event::KeyModifiers as Mod;
-                    match (modifiers, code) {
-                        (Mod::CONTROL, Char('c')) | (Mod::NONE, Esc) => break,
-                        (Mod::NONE, Char(c)) | (Mod::SHIFT, Char(c)) => {
-                            disp_str.push(c);
-                            draw_footer(&disp_str)?;
-                        },  // type c in msg
-                        (Mod::NONE, Enter) => {
-                            msg_tx.send(mem::take(&mut disp_str));
-                            draw_footer("")?;
-                        },  // send message
-                        (Mod::NONE, Backspace) => {
-                            disp_str.pop();
-                            draw_footer(&disp_str)?;
-                        },  // remove char
-                        (Mod::CONTROL, Backspace) => {}  // remove word
-                        (Mod::NONE, Delete) => {}  // remove char
-                        (Mod::CONTROL, Delete) => {}  // remove word
-                        (Mod::NONE, Up) => {
-                            move_pos(&mut cur_pos, true);
-                            draw_messages(&cur_pos, cur_size, &state)?;
-                            draw_footer(&disp_str)?;
-                        },  // scroll up
-                        (Mod::NONE, Down) => {
-                            move_pos(&mut cur_pos, false);
-                            draw_messages(&cur_pos, cur_size, &state)?;
-                            draw_footer(&disp_str)?;
-                        },  // scroll down
-                        (Mod::NONE, PageUp) => {}  // scroll way up
-                        (Mod::NONE, PageDown) => {}  // scroll way down
-                        (Mod::NONE, Home) => {}  // scroll way way up
-                        (Mod::NONE, End) => {}  // scroll way way down
-                        (Mod::CONTROL, Char('r')) => {  // redraw everything
-                            stdout.execute(terminal::Clear(ClearType::All))?;
-                            draw_header(cur_size)?;
-                            draw_messages(&cur_pos, cur_size, &state)?;
-                            draw_footer(&disp_str)?;
-                        }
-                        _ => continue,
-                    }
-                },
-                Event::Mouse(MouseEvent{kind, ..}) => {
-                    use crossterm::event::MouseEventKind;
-                    match kind {
-                        MouseEventKind::ScrollUp => move_pos(&mut cur_pos, true),
-                        MouseEventKind::ScrollDown => move_pos(&mut cur_pos, false),
-                        _ => continue,
-                    }
-                },
-                Event::Resize(x, y) => {
-                    // I test this a lot but actually it should be a rare event
-                    stdout.execute(terminal::Clear(ClearType::All))?;
-                    cur_size = (x, y);
-                    draw_header(cur_size)?;
-                    draw_messages(&cur_pos, cur_size, &state)?;
-                    draw_footer(&disp_str)?;
-                },
-            },
-            Ok(false) => {},  // No events to be processed
-            Err(_) => break,  // Failed to read, clean up and exit
-        }
-
-        // re-draw all messages from time to time
-        // this will display new messages as they come in
-        if time::SystemTime::now().duration_since(last_update).unwrap() > _DISP_DELAY {
-            draw_messages(&cur_pos, cur_size, &state)?;
-            draw_footer(&disp_str)?;
-            last_update = time::SystemTime::now();
-        }
-    }
-
-    stdout.queue(cursor::Show)?;
-    stdout.queue(cursor::EnableBlinking)?;
-    stdout.queue(LeaveAlternateScreen)?;
-    stdout.queue(SetAttribute(Attribute::Reset))?;
-    stdout.queue(event::DisableMouseCapture)?;
-    stdout.flush()?;
-    terminal::disable_raw_mode()?;
-    println!("Exited alternate screen");
-    Ok(())
-}
 
 fn requester(
     mut stream: TcpStream,
@@ -495,7 +187,7 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
     let state3 = state.clone();
     thread::spawn(|| {
         println!("Starting drawer thread.");
-        match drawer(state3, msg_tx) {  // drawer recieves text input and send to requester
+        match Display::start(state3, msg_tx) {  // drawer recieves text input and send to requester
             Ok(_) => println!("Drawer thread finished"),
             Err(e) => println!("Drawer thread crashed: {e}"),
             // TODO: end process if one thread crashes?
