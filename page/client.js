@@ -163,21 +163,23 @@ main = function() {
       scroll_target = message_list_div.children[0];
       while (bytes.length > 0) {
         var single_message = bytes.splice(-message_byte_size);
-        bytes_to_message(single_message, build_upwards);
+        new_message_div = bytes_to_message(single_message);
+        message_list_div.prepend(new_message_div);
       }
     } else { // insert at bottom; read messages normally
       while (bytes.length > 0) {
         var single_message = bytes.splice(0, message_byte_size);
-        scroll_target = bytes_to_message(single_message, build_upwards);
+        new_message_div = bytes_to_message(single_message);
+        message_list_div.appendChild(new_message_div);
+        scroll_target = new_message_div;
       }
     }
-
     // scroll to bottom if user is already at bottom
     if ((scroll_down || scroll_up) && scroll_target != null) {
       scroll_target.scrollIntoView();
     }
   };
-  function bytes_to_message(bytes, upwards) {
+  function bytes_to_message(bytes) {
     var server_time = unpack_number(bytes.splice(0, 8)); // 8 bytes
     var chat_key_4bytes = bytes.splice(0, 4); // 4 bytes
     var client_time = unpack_number(bytes.splice(0, 8)); // 8 bytes
@@ -209,9 +211,9 @@ main = function() {
     var padded_bytes = aes_cnt.decrypt(encrypted_bytes);
     var decrypted_bytes = padded_bytes.slice(0, -2*padded_bytes.slice(-1));
     var message_str = aesjs.utils.utf8.fromBytes(decrypted_bytes);
-    return build_message(username_str, date_str, message_str, upwards);
+    return build_message(username_str, date_str, message_str);
   };
-  function build_message(username_str, date_str, message_str, upwards) {
+  function build_message(username_str, date_str, message_str) {
     var msg_div = document.createElement("div");
     var usr_div = document.createElement("div");
     var time_div = document.createElement("div");
@@ -232,11 +234,6 @@ main = function() {
     msg_div.appendChild(usr_div);
     msg_div.appendChild(time_div);
     msg_div.appendChild(content_div);
-    if (upwards) {
-      message_list_div.prepend(msg_div);
-    } else {
-      message_list_div.appendChild(msg_div);
-    }
     return msg_div;
   };
   // *********************************MAINLOOP*********************************
