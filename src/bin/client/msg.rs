@@ -10,8 +10,10 @@ pub struct Message {
     // user: Hash,
     // text: Contents,
     // verified: bool,
-    pub length: u8,
-    cached_str_repr: String,  // TODO: duplicate storage?
+    // pub length: u8,
+    pub repr: String,  // TODO: duplicate storage?
+    // TODO: consider just having strings instead of this struct
+    // TODO: what do I do when the time needs to be displayed differently?
 }
 
 impl Message {
@@ -56,8 +58,8 @@ impl Message {
             // user,
             // text: cypher,
             // verified,
-            length,
-            cached_str_repr,
+            // length,
+            repr: cached_str_repr,
         })
     }
 
@@ -80,6 +82,6 @@ impl Message {
 
 impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.cached_str_repr)
+        write!(f, "{}", self.repr)
     }
 }

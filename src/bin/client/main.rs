@@ -3,8 +3,7 @@ use std::error::Error;
 use std::io::Write;
 use std::net::TcpStream;
 use std::net::ToSocketAddrs;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::Duration;
 use std::mem;
@@ -115,7 +114,7 @@ fn listener(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
 
 fn drawer(
     state: Arc<Mutex<GlobalState>>,
-    msg_tx: std::sync::mpsc::Sender<String>,
+    msg_tx: mpsc::Sender<String>,
 )-> crossterm::Result<()> {
     use crossterm::{
         QueueableCommand,
@@ -216,7 +215,7 @@ fn drawer(
 
     fn draw_messages(
         view: &ViewPos,
-        size: &(u16, u16),
+        size: (u16, u16),
         state: &Arc<Mutex<GlobalState>>,
     ) -> crossterm::Result<()> {
         // SIDE EFFECT: DELETES FOOTER!!!
@@ -232,17 +231,31 @@ fn drawer(
         // stdout.queue(SetForegroundColor(Color::Black))?;
         // stdout.queue(SetBackgroundColor(Color::Grey))?;
 
+        // clear current screen  (THIS DELETES FOOTER!)
+        stdout.queue(cursor::MoveTo(0, 2))?;  // TODO: terminal too small?
+        stdout.queue(terminal::Clear(ClearType::FromCursorDown))?;
+
+        if state.queue.len() <= remaining_lines as usize &&
+            // it's possible all messages fit on the screen
+            // do more expensive check to see if it's true
+            state.queue.iter().map(|m| 1+(m.repr.len() as u16 / w)).sum::<u16>() < h
+        {
+            // if it is true, just print with no checks
+            for msg in state.queue.iter() {
+                write!(stdout, "{msg}\r\n")?;
+            }
+            return stdout.flush();
+        }
+        
+        // Not all messages fit on screen
         match view {
             ViewPos::Index { msg_id, chr_id } => {
-                stdout.queue(cursor::MoveTo(0, 2))?;  // TODO: terminal too small?
-                stdout.queue(terminal::Clear(ClearType::FromCursorDown))?;
-
+                // cursor already at right position, draw one msg at a time
                 // TODO: print start.msg partial
                 for msg in state.queue.range(1+usize::from(*msg_id)..) {
                     if remaining_lines == 0 { break }
 
-                    let msg_str = msg.length + 27;  // TODO: magic number, length of message prefix
-                    let line_count = (u16::from(msg_str) / w) + 1;
+                    let line_count = (msg.repr.len() as u16 / w) + 1;
                     if let Some(res) = remaining_lines.checked_sub(line_count) {
                         // normal situation, whole message fits on screen
                         write!(stdout, "{msg}\r\n")?;
@@ -250,21 +263,36 @@ fn drawer(
                     } else {
                         let printable_chars = remaining_lines * size.0;
                         write!(stdout, "{}", &msg.to_string()[..usize::from(printable_chars)])?;
-                        
-                        break;
+                        break;  // finished drawing
                     }
                 }
             }
             ViewPos::Last => {
-                todo!()
+                // draw from bottom up
+                stdout.queue(cursor::MoveTo(0, h-2))?;
+                for msg in state.queue.iter().rev() {
+                    if remaining_lines == 0 { break }
+                    let msg_height = (msg.repr.len() as u16 / w) + 1;
+                    if msg_height <= remaining_lines {  // message fits no problemo
+                        stdout.queue(cursor::MoveToPreviousLine(msg_height))?;
+                        write!(stdout, "{msg}")?;
+                        remaining_lines -= msg_height;
+                    } else {  // only bottom half of top msg fits
+                        // stdout.queue(cursor::MoveToPreviousLine(remaining_lines))?;
+                        
+                        stdout.queue(cursor::MoveTo(0, 2))?;
+                        let skipped_lines = msg_height - remaining_lines;
+                        write!(stdout, "{}", &msg.repr[(w*skipped_lines) as usize..])?;
+                        break;  // finished drawing
+                    }
+                }
             }
         }
-
         stdout.flush()
     }
 
-    // let mut cur_pos = ViewPos::Last;  // TODO: should start with this
-    let mut cur_pos = ViewPos::Index{msg_id: 0, chr_id: 0};
+    let mut cur_pos = ViewPos::Last;  // TODO: should start with this
+    // let mut cur_pos = ViewPos::Index{msg_id: 0, chr_id: 0};
     fn move_pos(pos: &mut ViewPos, up: bool) {
         // positive is scolling up
         *pos = match pos {
@@ -282,7 +310,7 @@ fn drawer(
     let mut cur_size = terminal::size()?;
     stdout.execute(Clear(ClearType::All))?;
     draw_header(cur_size)?;
-    draw_messages(&cur_pos, &cur_size, &state)?;
+    draw_messages(&cur_pos, cur_size, &state)?;
     draw_footer("")?;
 
     let mut disp_str = String::with_capacity(50);
@@ -317,12 +345,12 @@ fn drawer(
                         (Mod::CONTROL, Delete) => {}  // remove word
                         (Mod::NONE, Up) => {
                             move_pos(&mut cur_pos, true);
-                            draw_messages(&cur_pos, &cur_size, &state)?;
+                            draw_messages(&cur_pos, cur_size, &state)?;
                             draw_footer(&disp_str)?;
                         },  // scroll up
                         (Mod::NONE, Down) => {
                             move_pos(&mut cur_pos, false);
-                            draw_messages(&cur_pos, &cur_size, &state)?;
+                            draw_messages(&cur_pos, cur_size, &state)?;
                             draw_footer(&disp_str)?;
                         },  // scroll down
                         (Mod::NONE, PageUp) => {}  // scroll way up
@@ -341,24 +369,25 @@ fn drawer(
                     }
                 },
                 Event::Resize(x, y) => {
+                    // I test this a lot but actually it should be a rare event
+                    stdout.execute(terminal::Clear(ClearType::All))?;
                     cur_size = (x, y);
                     draw_header(cur_size)?;
-                    draw_messages(&cur_pos, &cur_size, &state)?;
+                    draw_messages(&cur_pos, cur_size, &state)?;
                     draw_footer(&disp_str)?;
                 },
             },
             Ok(false) => {},  // No events to be processed
-            Err(e) => break,
+            Err(_) => break,  // Failed to read, clean up and exit
         }
 
         // re-draw all messages from time to time
         // this will display new messages as they come in
         if time::SystemTime::now().duration_since(last_update).unwrap() > _DISP_DELAY {
-            draw_messages(&cur_pos, &cur_size, &state)?;
+            draw_messages(&cur_pos, cur_size, &state)?;
             draw_footer(&disp_str)?;
             last_update = time::SystemTime::now();
         }
-
     }
 
     stdout.queue(cursor::Show)?;
@@ -375,20 +404,24 @@ fn drawer(
 fn requester(
     mut stream: TcpStream,
     state: Arc<Mutex<GlobalState>>,
-    msg_rx: std::sync::mpsc::Receiver<String>,
+    snd_rx: mpsc::Receiver<String>,
 ) -> Res {
     let user_id = state.lock().map_err(|_| "Failed to lock state")?.user_id;
     let chat_id = state.lock().map_err(|_| "Failed to lock state")?.chat_id;
     let chat_key = state.lock().map_err(|_| "Failed to lock state")?.chat_key;
     let mut cypher_buf = [0; CYPHER_SIZE];
+
+    // Fetch until we get first message packet
     while state.lock().map_err(|_| "Failed to lock state")?.queue.is_empty() {
         comm::send_fetch(&mut stream, &chat_id)?;
-        if let Ok(msg) = msg_rx.try_recv() {
+        if let Ok(msg) = snd_rx.try_recv() {
             cypher_buf = Message::make_cypher(&msg, &chat_key).unwrap();  // TODO: unwrap
             comm::send_msg(&mut stream, &chat_id, &user_id, &cypher_buf)?;
         }
         thread::sleep(FQ_DELAY);
     }
+
+    // Query for scroll or fetch for more
     loop {
         comm::send_query(
             &mut stream,
@@ -397,7 +430,7 @@ fn requester(
             50,
             state.lock().unwrap().max_id,
         )?;
-        if let Ok(msg) = msg_rx.try_recv() {
+        if let Ok(msg) = snd_rx.try_recv() {
             cypher_buf = Message::make_cypher(&msg, &chat_key).unwrap();  // TODO: unwrap
             comm::send_msg(&mut stream, &chat_id, &user_id, &cypher_buf)?;
         }
@@ -438,7 +471,8 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
     };
     let state = Arc::new(Mutex::new(state));
 
-    let (rx, tx) = std::sync::mpsc::channel::<String>();
+    // mpsc for sending messages
+    let (msg_tx, msg_rx) = mpsc::channel::<String>();
 
     // start listener thread
     let stream2 = stream.try_clone()?;
@@ -455,7 +489,7 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
     let state3 = state.clone();
     thread::spawn(|| {
         println!("Starting drawer thread.");
-        match drawer(state3, rx) {  // drawer recieves text input and send to requester
+        match drawer(state3, msg_tx) {  // drawer recieves text input and send to requester
             Ok(_) => println!("Drawer thread finished"),
             Err(e) => println!("Drawer thread crashed: {e}"),
             // TODO: end process if one thread crashes?
@@ -464,7 +498,7 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
 
     // main thread is requester thread
     println!("Starting requests");
-    match requester(stream, state, tx) {  // requester sends messages from tx to server
+    match requester(stream, state, msg_rx) {  // requester sends messages from tx to server
         Ok(_) => println!("Request loop finished"),
         Err(e) => println!("Request loop crashed: {e}"),
     };
