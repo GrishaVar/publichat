@@ -21,14 +21,11 @@ use crossterm::terminal::{
 };
 use crossterm::event::{
     self,
-    Event,
     KeyEvent,
     MouseEvent,
-    MouseEventKind
 };
 
 use crate::common::*;
-// bad style, kinda circular import... move to commons.rs?
 
 const BG_COLOUR: Color = Color::Rgb{r: 0xd0, g: 0xd0, b: 0xd0};
 const FG_COLOUR: Color = Color::Rgb{r: 0x66, g: 0x00, b: 0x33};
@@ -47,7 +44,6 @@ pub struct Display {
     view: ViewPos,
     last_update: SystemTime,
 }
-
 
 // WARNING: this file is very OO; proceed with your own risk!
 impl Display {
@@ -94,57 +90,19 @@ impl Display {
     }
 
     fn mainloop(&mut self) -> crossterm::Result<()> {
+        use crossterm::event::Event::*;
+        use crossterm::event::KeyCode::{Char, Esc};
+        use crossterm::event::KeyModifiers as Mod;
         loop {
             // wait for events to come in. Update instantly if they do, otherwise
             // update at defined FPS when a new message comes in.
             match event::poll(_DISP_DELAY) {
                 Ok(true) => match event::read()? {
-                    Event::Key(KeyEvent{code, modifiers}) => {
-                        use crossterm::event::KeyCode::*;
-                        use crossterm::event::KeyModifiers as Mod;
-                        match (modifiers, code) {
-                            (Mod::CONTROL, Char('c')) | (Mod::NONE, Esc) => break Ok(()),
-                            (Mod::NONE, Char(c)) | (Mod::SHIFT, Char(c)) => {
-                                self.user_msg.push(c);
-                                self.draw_footer()?;
-                            },  // type c in msg
-                            (Mod::NONE, Enter) => {
-                                self.msg_tx.send(mem::take(&mut self.user_msg));
-                                self.draw_footer()?;
-                            },  // send message
-                            (Mod::NONE, Backspace) => {
-                                self.user_msg.pop();
-                                self.draw_footer()?;
-                            },  // remove char
-                            (Mod::CONTROL, Backspace) => {}  // remove word
-                            (Mod::NONE, Delete) => {}  // remove char
-                            (Mod::CONTROL, Delete) => {}  // remove word
-                            (Mod::NONE, Up) => {
-                                self.move_pos(true);
-                                self.draw_messages()?;
-                                self.draw_footer()?;
-                            },  // scroll up
-                            (Mod::NONE, Down) => {
-                                self.move_pos(false);
-                                self.draw_messages()?;
-                                self.draw_footer()?;
-                            },  // scroll down
-                            (Mod::NONE, PageUp) => {}  // scroll way up
-                            (Mod::NONE, PageDown) => {}  // scroll way down
-                            (Mod::NONE, Home) => {}  // scroll way way up
-                            (Mod::NONE, End) => {}  // scroll way way down
-                            (Mod::CONTROL, Char('r')) => self.refresh()?,  // redraw everything
-                            _ => continue,
-                        }
-                    },
-                    Event::Mouse(MouseEvent{kind, ..}) => {
-                        match kind {
-                            MouseEventKind::ScrollUp => self.move_pos(true),
-                            MouseEventKind::ScrollDown => self.move_pos(false),
-                            _ => continue,
-                        }
-                    },
-                    Event::Resize(x, y) => {
+                    Key(KeyEvent{code: Char('c'), modifiers: Mod::CONTROL }) => break Ok(()),
+                    Key(KeyEvent{code: Esc, modifiers: Mod::NONE }) => break Ok(()),
+                    Key(e) => self.handle_keyboard_event(e)?,
+                    Mouse(e) => self.handle_mouse_event(e)?,
+                    Resize(x, y) => {
                         // I test this a lot but actually it should be a rare event
                         self.size = (x, y);
                         self.refresh()?;
@@ -314,5 +272,69 @@ impl Display {
                 ViewPos::Index{msg_id: msg_id+1, chr_id: chr_id}
             },
         };
+    }
+
+    fn handle_keyboard_event(&mut self, event: KeyEvent) -> crossterm::Result<()> {
+        use crossterm::event::KeyCode::*;
+        use crossterm::event::KeyModifiers as Mod;
+        match (event.modifiers, event.code) {
+            (Mod::NONE, Char(c)) | (Mod::SHIFT, Char(c)) => {  // add char
+                self.user_msg.push(c);
+                self.draw_footer()
+            },
+            (Mod::NONE, Backspace) => {  // remove char
+                self.user_msg.pop();
+                self.draw_footer()
+            },
+            (Mod::NONE, Enter) => {  // send message
+                self.msg_tx.send(mem::take(&mut self.user_msg));
+                self.draw_footer()
+            },
+            // (Mod::CONTROL, Backspace) => Ok(()),  // remove word
+            // (Mod::NONE, Delete) => Ok(()),  // remove char
+            // (Mod::CONTROL, Delete) => Ok(()),  // remove word
+            (Mod::NONE, Up) => {  // scroll up
+                self.move_pos(true);
+                self.draw_messages()?;
+                self.draw_footer()
+            },
+            (Mod::NONE, Down) => {  // scroll down
+                self.move_pos(false);
+                self.draw_messages()?;
+                self.draw_footer()
+            },
+            (Mod::NONE, PageUp) => Ok(()),  // scroll way up
+            (Mod::NONE, PageDown) => Ok(()),  // scroll way down
+            (Mod::NONE, Home) => {  // scroll way way up
+                self.view = ViewPos::Index{msg_id: 0, chr_id: 0};
+                self.draw_messages()?;
+                self.draw_footer()
+            },
+            (Mod::NONE, End) => {  // scroll way way down
+                self.view = ViewPos::Last;
+                self.draw_messages()?;
+                self.draw_footer()
+            },
+            (Mod::CONTROL, Char('r')) => self.refresh(),  // redraw everything
+            (Mod::CONTROL, Char('c')) | (Mod::NONE, Esc) => unreachable!(),
+            _ => Ok(()),
+        }
+    }
+
+    fn handle_mouse_event(&mut self, event: MouseEvent) -> crossterm::Result<()> {
+        use crossterm::event::MouseEventKind::*;
+        match event.kind {
+            ScrollUp => {
+                self.move_pos(true);
+                self.draw_messages()?;
+                self.draw_footer()
+            },
+            ScrollDown => {
+                self.move_pos(false);
+                self.draw_messages()?;
+                self.draw_footer()
+            },
+            _ => Ok(()),
+        }
     }
 }
