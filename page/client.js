@@ -54,6 +54,7 @@ main = function() {
     var b = parseInt(colour.slice(5,7), 16);
     return ((r*0.299 + g*0.587 + b*0.114) > 150) ? "#000000" : "#ffffff";
   }
+
   // *******************************SET_STATUS*********************************
   function set_status(value) {
     if (value == 0) { // good = 0; wait = 1; error = 2;
@@ -63,12 +64,12 @@ main = function() {
     } else {
       socket_button.style.background = style.getPropertyValue("--status_err");
     }
-  }
+  };
 
   // *******************************OPEN_SOCKET********************************
   function open_socket() {
     set_status(1);
-    socket = new WebSocket("wss://" + location.host + "/ws");
+    socket = new WebSocket("ws://" + location.host + "/ws");
     socket.onopen = function() {
       console.log("socket opened"); 
       setTimeout(function() {loop = true;}, 1000);
@@ -117,7 +118,6 @@ main = function() {
     var blob = message_event.data;
     reader.readAsArrayBuffer(blob);
   };
-
   reader.onload = function() {
     set_status(1);  // yellow button top left
     var result = reader.result;
@@ -178,19 +178,20 @@ main = function() {
     }
   };
   function bytes_to_message(bytes, upwards) {
-    //message:Time, USER ID, Message cypher, Signature
-    var time = unpack_number(bytes.splice(0, 8)); // 8 bytes
-    var user_id = aesjs.utils.hex.fromBytes(bytes.splice(0, 32)); // 32 bytes
-    var encrypted_bytes = bytes.splice(0, 128);
+    var server_time = unpack_number(bytes.splice(0, 8)); // 8 bytes
+    var chat_key_4bytes = bytes.splice(0, 4); // 4 bytes
+    var client_time = unpack_number(bytes.splice(0, 8)); // 8 bytes
+    var public_key = aesjs.utils.hex.fromBytes(bytes.splice(0, 32)); // 32 bytes
+    var encrypted_bytes = bytes.splice(0, message_content_lenght);
     //var Signature = bytes.splice(0, 128);   // veryify this at some point*/
 
     // username string
-    var username_str = user_id.slice(0,20); // is user empty hash sha3("") ?
+    var username_str = public_key.slice(0,20); // is user empty hash sha3("") ?
     if (username_str == "a7ffc6f8bf1ed76651c1"){
       username_str = "79985aAnonymous"; // 507550 is hex for green
     }
     // date string
-    var date = new Date(Number(time));
+    var date = new Date(Number(server_time));
     var today = new Date();
     if (date.toDateString() === today.toDateString()) {  // sent today
       var date_str = "";
@@ -206,7 +207,7 @@ main = function() {
     var cnt = new aesjs.Counter(1);
     var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, cnt);
     var padded_bytes = aes_cnt.decrypt(encrypted_bytes);
-    var decrypted_bytes = padded_bytes.slice(0, -padded_bytes.slice(-1));
+    var decrypted_bytes = padded_bytes.slice(0, -2*padded_bytes.slice(-1));
     var message_str = aesjs.utils.utf8.fromBytes(decrypted_bytes);
     return build_message(username_str, date_str, message_str, upwards);
   };
@@ -282,40 +283,66 @@ main = function() {
 
   // *********************************SENDING**********************************
   function send_message() {
-    var outbound_bytes = message_to_bytes();
-    if (outbound_bytes == null) {return;}
-    document.getElementById("message_entry").value = "";
+    var chat_id = get_chat_id();
+    var cypher = message_to_cypher();
+    if (cypher == null) {return;}
     // counter_div.textContent = "0/" + message_content_lenght;
+  
+    var signature = sign(cypher);
+    outbound_bytes = [].concat(snd_pad, chat_id, cypher, signature, end_pad);
+
     ws_send(outbound_bytes);
-    
+    document.getElementById("message_entry").value = "";
   };
   function pad_message(message) {
+    if (message.length % 2 == 1) {
+      message += ' ';
+    }
     var message = aesjs.utils.utf8.toBytes(message);
+    
     var pad_lenght = message_content_lenght - message.length;
-    var padding = Array(pad_lenght).fill(pad_lenght);
+    var pad_character = Math.floor(pad_lenght/2);
+    var padding = Array(pad_lenght).fill(pad_character);
     // concatinate the arrays
     var padded_message = new Uint8Array(message_content_lenght);
     padded_message.set(message);
     padded_message.set(padding, message.length);
     return padded_message;
   };
-  function message_to_bytes() {
-    // message: ["snd", chat_id, user_id, cypher, "end"]
+  function sign(cypher) {
+    return new Array(64).fill(0);
+  };
+  function get_public_key() {
+    return new Array(32).fill(0);
+  };
+  function get_time_array() {
+    const time = Date.now();
+    return pack_number(time, 8);
+  };
+  function get_chat_id() {
+    var title = get_title();
+    var chat_key = sha3_256.array(title);
+    return sha3_256.array(chat_key);
+  };
+  function message_to_cypher() {
     var title = get_title();        // known by peers
-    var password = get_password();  // private
     var message = get_message();    // known by peers
     if (message == "") {return null;}
-
-    var chat_key = sha3_256.array(title);  // known by peers
-    var chat_id = sha3_256.array(chat_key);  // chat key is public
-    var user_id = sha3_256.array(password);  // user id is public
-
     var text_bytes = pad_message(message);
+    var chat_key = sha3_256.array(title);  // known by peers
     var cnt = new aesjs.Counter(1);
     var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, cnt);
-    var encrypted_bytes = Array.from(aes_cnt.encrypt(text_bytes));
-
-    return [].concat(snd_pad, chat_id, user_id, encrypted_bytes, end_pad);
+    var encrypted_message = Array.from(aes_cnt.encrypt(text_bytes));
+    // other stuff
+    var chat_key_4bytes = chat_key.slice(0,4);  // known by peers
+    var client_time = get_time_array();
+    var public_key = get_public_key();
+    return [].concat(
+      chat_key_4bytes,
+      client_time, 
+      public_key, 
+      encrypted_message
+    );
   };
 
   // *******************************CHAR_COUNTER*******************************
