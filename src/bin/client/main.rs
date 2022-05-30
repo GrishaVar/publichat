@@ -175,31 +175,30 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
     // start listener thread
     let stream2 = stream.try_clone()?;
     let state2 = state.clone();
+    println!("Starting listener thread...");
     thread::spawn(|| {
-        println!("Starting listener thread.");
         match listener(stream2, state2) {
             Ok(_) => println!("Listener thread finished"),
             Err(e) => println!("Listener thread crashed: {e}"),
         }
     });
 
-    // start drawer thread
+    // start requester thread
     let state3 = state.clone();
+    println!("Starting requester thread...");
     thread::spawn(|| {
-        println!("Starting drawer thread.");
-        match Display::start(state3, msg_tx) {  // drawer recieves text input and send to requester
-            Ok(_) => println!("Drawer thread finished"),
-            Err(e) => println!("Drawer thread crashed: {e}"),
-            // TODO: end process if one thread crashes?
-        }
+        match requester(stream, state3, msg_rx) {  // requester sends messages from tx to server
+            Ok(_) => println!("Request loop finished"),
+            Err(e) => println!("Request loop crashed: {e}"),
+        };
     });
 
-    // main thread is requester thread
-    println!("Starting requests");
-    match requester(stream, state, msg_rx) {  // requester sends messages from tx to server
-        Ok(_) => println!("Request loop finished"),
-        Err(e) => println!("Request loop crashed: {e}"),
-    };
+    // start drawer thread
+    println!("Starting drawer...");
+    match Display::start(state, msg_tx) {  // drawer recieves text input and send to requester
+        Ok(_) => println!("Drawer finished"),
+        Err(e) => println!("Drawer crashed: {e}"),
+    }
 
     Ok(())
 }
