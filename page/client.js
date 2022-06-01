@@ -70,7 +70,7 @@ main = function() {
   // *******************************OPEN_SOCKET********************************
   function open_socket() {
     set_status(1);
-    socket = new WebSocket("ws://" + location.host + "/wss");
+    socket = new WebSocket("wss://" + location.host + "/ws");
     socket.onopen = function() {
       console.log("socket opened"); 
       setTimeout(function() {loop = true;}, 1000);
@@ -187,11 +187,30 @@ main = function() {
     // Verify signature
     return key.verify(hash, signature)
   }
+  function make_verify_mark(is_verified) {
+    var main_div = document.createElement("div");
+    var circle = document.createElement("div");
+    var stem = document.createElement("div");
+    var kick = document.createElement("div");
+    main_div.className = "checkmark";
+    circle.className = "checkmark_circle";
+    stem.className = "checkmark_stem";
+    kick.className = "checkmark_kick";
+    var checkmark_colour = "--status_err"
+    if (is_verified) {
+      checkmark_colour = "--status_ok"
+    }
+    circle.style.background = style.getPropertyValue(checkmark_colour);
+    main_div.appendChild(circle);
+    main_div.appendChild(stem);
+    main_div.appendChild(kick);
+    return main_div;
+  }
   function bytes_to_message(bytes) {
-    var server_time = unpack_number(bytes.splice(0, 8)); // 8 bytes
+    var server_time_bytes = bytes.splice(0, 8); // 8 bytes
     var bytes_hash = sha3_256.array(bytes.slice(0, cypher_length));
     var chat_key_4bytes = bytes.splice(0, 4); // 4 bytes
-    var client_time = unpack_number(bytes.splice(0, 8)); // 8 bytes
+    var client_time = bytes.splice(0, 8); // 8 bytes
     var public_key = bytes.splice(0, 32); // 32 bytes
     var encrypted_bytes = bytes.splice(0, message_content_lenght);
     var signature = bytes.splice(0, 64);
@@ -200,15 +219,15 @@ main = function() {
     // username string
     var username_str = aesjs.utils.hex.fromBytes(public_key).slice(0, 20);
     console.log(username_str, is_verified);
-    if (username_str == "e0b1fe74117e1b95b608"){ // pub key of empty string
+    if (username_str == "e0b1fe74117e1b95b608") { // pub key of empty string
       username_str = "79985aAnonymous"; // 507550 is hex for green
     }
     // date string
-    var date = new Date(Number(server_time));
+    var date = new Date(Number(unpack_number(server_time_bytes)));
     var today = new Date();
     if (date.toDateString() === today.toDateString()) {  // sent today
       var date_str = "";
-    } else if (date.getFullYear() === today.getFullYear()){  // sent this year
+    } else if (date.getFullYear() === today.getFullYear()) {  // sent this year
       var date_str = date.toLocaleString().slice(0,-15);
     } else {
       var date_str = date.toLocaleString().slice(0,-10);  // date < this year
@@ -229,6 +248,7 @@ main = function() {
     var usr_div = document.createElement("div");
     var time_div = document.createElement("div");
     var content_div = document.createElement("div");
+    var checkmark_div = make_verify_mark(is_verified);
 
     msg_div.className = "message";
     usr_div.className = "username";
@@ -240,8 +260,8 @@ main = function() {
     usr_div.style.color = white_or_black(bg_colour);  // selects best contrast
     usr_div.innerHTML = username_str.slice(6);
     time_div.innerHTML = date_str;
+    time_div.appendChild(checkmark_div);
     content_div.innerHTML = message_str;
-
     msg_div.appendChild(usr_div);
     msg_div.appendChild(time_div);
     msg_div.appendChild(content_div);

@@ -111,7 +111,40 @@
         font-family: verdana;
         overflow-wrap: break-word;
       }
-
+      .checkmark {
+        display: inline-block;
+        margin-left: 3px;
+        width: 12px;
+        height: 12px;
+        -ms-transform: rotate(45deg); /* IE 9 */
+        -webkit-transform: rotate(45deg); /* Chrome, Safari, Opera */
+        transform: rotate(45deg);
+      }
+      .checkmark_circle {
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        background-color: var(--status_wait);
+        border-radius: 6px;
+        left: 0;
+        top: 0;
+      }
+      .checkmark_stem {
+        position: absolute;
+        width: 2px;
+        height: 6px;
+        background-color: #fff;
+        left: 6px;
+        top: 2px;
+      }
+      .checkmark_kick {
+        position: absolute;
+        width: 4px;
+        height: 2px;
+        background-color: #fff;
+        left: 3px;
+        top: 6px;
+      }
       /* ********** BOTTOM ********** */
       .bottom {
         flex-grow: 1;
@@ -150,8 +183,6 @@
         font-family: verdana;
         outline: none;
         overflow-wrap: break-word;
-        wrap: "soft";
-
         display: block;
       }
       .send_button_div {
