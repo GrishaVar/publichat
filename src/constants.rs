@@ -8,7 +8,7 @@ Get message from client:
         - Chat key (first 4 bytes)                  4
         - Client time                               8
         - Public key                                32
-        - Message                                   <396
+        - Encrypted Message                         <396
         - Padding to cypher size                    <=396
     - Signature                                     64
     - PADDING                                       3

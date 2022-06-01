@@ -185,7 +185,12 @@ main = function() {
   function verify_signature(pub_key_bytes, hash, signature) {
     var ec = new elliptic.eddsa('ed25519');
     var key = ec.keyFromPublic(pub_key_bytes, 'bytes');
-    return key.verify(hash, signature)
+    try {
+      key.verify(hash, signature);
+      return true;
+    } catch(e) {
+      return false;
+    }
   };
   function verify_time(server_time, client_time) {
     var res = server_time >= client_time;  // st greater than ct
@@ -260,8 +265,8 @@ main = function() {
     } else {
       console.log(
         "Message: ", message_str,
-        "from: ", message_str,
-        "could not be verified because:",
+        "\nfrom: ", username_str,
+        "\nCould not be verified because:",
         "\nSignautre check: ", sig_verified,
         "\nTime check: ", time_verified,
         "\nChat check: ", chat_verified,
