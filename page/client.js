@@ -3,6 +3,7 @@ main = function() {
   var min_message_id = Number.MAX_SAFE_INTEGER;
   var message_byte_size = 512;
   var message_content_lenght = 396;
+  var cypher_length = message_content_lenght + 4 + 8 + 32;
   var fch_pad = [102,  99, 104];  // "fch"
   var qry_pad = [113, 114, 121];  // "qry"
   var snd_pad = [115, 110, 100];  // "snd"
@@ -18,7 +19,7 @@ main = function() {
   send_button.onclick = function() {send_message()};
   socket_button.onclick = function() {toggle_loop();};
   message_list_div.addEventListener("scroll", top_scroll_query);
-  message_entry.addEventListener("keyup",keystroke_input);
+  message_entry.addEventListener("keyup", keystroke_input);
   
   var reader = new FileReader();
   var socket = null;
@@ -69,7 +70,7 @@ main = function() {
   // *******************************OPEN_SOCKET********************************
   function open_socket() {
     set_status(1);
-    socket = new WebSocket("ws://" + location.host + "/ws");
+    socket = new WebSocket("ws://" + location.host + "/wss");
     socket.onopen = function() {
       console.log("socket opened"); 
       setTimeout(function() {loop = true;}, 1000);
@@ -179,17 +180,27 @@ main = function() {
       scroll_target.scrollIntoView();
     }
   };
+  function verify_signature(pub_key_bytes, hash, signature) {
+    var ec = new elliptic.eddsa('ed25519');
+    var key = ec.keyFromPublic(pub_key_bytes, 'bytes');
+
+    // Verify signature
+    return key.verify(hash, signature)
+  }
   function bytes_to_message(bytes) {
     var server_time = unpack_number(bytes.splice(0, 8)); // 8 bytes
+    var bytes_hash = sha3_256.array(bytes.slice(0, cypher_length));
     var chat_key_4bytes = bytes.splice(0, 4); // 4 bytes
     var client_time = unpack_number(bytes.splice(0, 8)); // 8 bytes
-    var public_key = aesjs.utils.hex.fromBytes(bytes.splice(0, 32)); // 32 bytes
+    var public_key = bytes.splice(0, 32); // 32 bytes
     var encrypted_bytes = bytes.splice(0, message_content_lenght);
-    //var Signature = bytes.splice(0, 128);   // veryify this at some point*/
+    var signature = bytes.splice(0, 64);
+    var is_verified = verify_signature(public_key, bytes_hash, signature);
 
     // username string
-    var username_str = public_key.slice(0,20); // is user empty hash sha3("") ?
-    if (username_str == "a7ffc6f8bf1ed76651c1"){
+    var username_str = aesjs.utils.hex.fromBytes(public_key).slice(0, 20);
+    console.log(username_str, is_verified);
+    if (username_str == "e0b1fe74117e1b95b608"){ // pub key of empty string
       username_str = "79985aAnonymous"; // 507550 is hex for green
     }
     // date string
@@ -211,9 +222,9 @@ main = function() {
     var padded_bytes = aes_cnt.decrypt(encrypted_bytes);
     var decrypted_bytes = padded_bytes.slice(0, -2*padded_bytes.slice(-1));
     var message_str = aesjs.utils.utf8.fromBytes(decrypted_bytes);
-    return build_message(username_str, date_str, message_str);
+    return build_message(username_str, date_str, message_str, is_verified);
   };
-  function build_message(username_str, date_str, message_str) {
+  function build_message(username_str, date_str, message_str, is_verified) {
     var msg_div = document.createElement("div");
     var usr_div = document.createElement("div");
     var time_div = document.createElement("div");
@@ -307,10 +318,19 @@ main = function() {
     return padded_message;
   };
   function sign(cypher) {
-    return new Array(64).fill(0);
+    //var EdDSA = require('elliptic').eddsa;
+    var ec = new elliptic.eddsa('ed25519');
+    var secret = get_password();
+    var key_pair = ec.keyFromSecret(secret);
+    var cypher_hash = sha3_256.array(cypher);
+    var signature = key_pair.sign(cypher_hash).toBytes();
+    return signature;
   };
   function get_public_key() {
-    return new Array(32).fill(0);
+    var ec = new elliptic.eddsa('ed25519');
+    var secret = get_password();
+    var key_pair = ec.keyFromSecret(secret);
+    return key_pair.pubBytes();
   };
   function get_time_array() {
     const time = Date.now();
