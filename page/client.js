@@ -227,12 +227,8 @@ main = function() {
     var public_key = bytes.splice(0, 32); // 32 bytes
     var encrypted_bytes = bytes.splice(0, message_content_lenght);
     var signature = bytes.splice(0, 64);
-    var sig_verified = verify_signature(public_key, bytes_hash, signature);
-    var time_verified = verify_time(server_time, client_time);
-    var chat_verify =  verify_chat_key(chat_key_4bytes);
     // username string
     var username_str = aesjs.utils.hex.fromBytes(public_key).slice(0, 20);
-    console.log(username_str, sig_verified, time_verified, chat_verify);
     if (username_str == "e0b1fe74117e1b95b608") { // pub key of empty string
       username_str = "79985aAnonymous"; // 507550 is hex for green
     }
@@ -248,14 +244,30 @@ main = function() {
     }
     date_str += " " + date.toLocaleTimeString().slice(0,-3);
     // message string
-    var title = get_title();
-    var chat_key = sha3_256.array(title);
+    var chat_key = get_chat_key();
     var cnt = new aesjs.Counter(1);
     var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, cnt);
     var padded_bytes = aes_cnt.decrypt(encrypted_bytes);
     var decrypted_bytes = padded_bytes.slice(0, -2*padded_bytes.slice(-1));
     var message_str = aesjs.utils.utf8.fromBytes(decrypted_bytes);
-    return build_message(username_str, date_str, message_str, true);
+    
+    var sig_verified = verify_signature(public_key, bytes_hash, signature);
+    var time_verified = verify_time(server_time, client_time);
+    var chat_verified =  verify_chat_key(chat_key_4bytes);
+    var is_verified = false;
+    if (sig_verified && time_verified && chat_verified) {
+      is_verified = true;
+    } else {
+      console.log(
+        "Message: ", message_str,
+        "from: ", message_str,
+        "could not be verified because:",
+        "\nSignautre check: ", sig_verified,
+        "\nTime check: ", time_verified,
+        "\nChat check: ", chat_verified,
+      );
+    }
+    return build_message(username_str, date_str, message_str, is_verified);
   };
   function build_message(username_str, date_str, message_str, is_verified) {
     var msg_div = document.createElement("div");
@@ -290,26 +302,24 @@ main = function() {
     }
     // check if chat title has changed (and we have received essages)
     if (title == old_title && max_message_id >= min_message_id) {
-      query_messages(title, false);  // false means new messages
+      query_messages(false);  // false means new messages
     } else {
       set_status(1);  // yellow button top left will be made green by receive
       // update chat list to new title
       reset_chat();
-      fetch_messages(title);
+      fetch_messages();
     }
     setTimeout(function() {mainloop(title);}, 500);
   };
   
   // *********************************QUERY/FETCH******************************
   function fetch_messages(title) {
-    var chat_key = sha3_256.array(title);
-    var chat_id = sha3_256.array(chat_key);
+    var chat_id = get_chat_id();
     chat_id_hash = chat_id;
     ws_send([].concat(fch_pad, chat_id, end_pad));
   };
-  function query_messages(title, up) {
-    var chat_key = sha3_256.array(title);
-    var chat_id = sha3_256.array(chat_key);
+  function query_messages(up) {
+    var chat_id = get_chat_id();
     if (up) { // query messages upward (old messages)
       var query = [0x7f].concat(pack_number(min_message_id, 3));
     } else { // query messages downward (new messages)
@@ -337,7 +347,7 @@ main = function() {
     document.getElementById("message_entry").value = "";
   };
   function pad_message(message) {
-    if (message.length % 2 == 1) {
+    if (message.length % 2 == 1) { // add space for message of odd length
       message += ' ';
     }
     var message = aesjs.utils.utf8.toBytes(message);
