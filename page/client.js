@@ -32,7 +32,7 @@ main = function() {
   function get_message(){return message_entry.value;}
   
   function unpack_number(bytes) {
-    res = 0;
+    var res = 0;
     for (var i = 0; i<bytes.length; i++) {
       res *= 256;  // same as res << 8 but also works for number > 32 bit
       res += bytes[i];
@@ -40,13 +40,15 @@ main = function() {
     return res;
   };
   function pack_number(num, size) {
-    res = []
+    var res = [];
     var num_copy = num;
     for (var i = 0; i<size; i++) {
       res.unshift(num & 0xff);
-      num = num >>> 8;
+      num = Math.floor(num / 256); // same as >> 8 but works for ints > 32 bit
     }
-    if (num > 0) {console.log("warning: num too big for array", num_copy, size)}
+    if (num > 0) {
+      console.log("warning: num too big for array", num_copy, size)
+    }
     return res;
   };
   function white_or_black(colour) {  // which text colour gives more contrast
@@ -183,9 +185,20 @@ main = function() {
   function verify_signature(pub_key_bytes, hash, signature) {
     var ec = new elliptic.eddsa('ed25519');
     var key = ec.keyFromPublic(pub_key_bytes, 'bytes');
-
-    // Verify signature
     return key.verify(hash, signature)
+  };
+  function verify_time(server_time, client_time) {
+    var res = server_time >= client_time;  // st greater than ct
+    var res = res && (server_time-client_time < 1000*60*1); // max 1 min old
+    return res;
+  };
+  function verify_chat_key(chat_key_4bytes) {
+    var expected = get_chat_key().splice(0,4);
+    var res = true;
+    for (let i = 0; i < chat_key_4bytes.length; i++) {
+      res = res && (expected[i] == chat_key_4bytes[i]);
+    }
+    return res;
   }
   function make_verify_mark(is_verified) {
     var main_div = document.createElement("div");
@@ -205,25 +218,26 @@ main = function() {
     main_div.appendChild(stem);
     main_div.appendChild(kick);
     return main_div;
-  }
+  };
   function bytes_to_message(bytes) {
-    var server_time_bytes = bytes.splice(0, 8); // 8 bytes
+    var server_time = unpack_number(bytes.splice(0, 8)); // 8 bytes
     var bytes_hash = sha3_256.array(bytes.slice(0, cypher_length));
     var chat_key_4bytes = bytes.splice(0, 4); // 4 bytes
-    var client_time = bytes.splice(0, 8); // 8 bytes
+    var client_time = unpack_number(bytes.splice(0, 8)); // 8 bytes
     var public_key = bytes.splice(0, 32); // 32 bytes
     var encrypted_bytes = bytes.splice(0, message_content_lenght);
     var signature = bytes.splice(0, 64);
-    var is_verified = verify_signature(public_key, bytes_hash, signature);
-
+    var sig_verified = verify_signature(public_key, bytes_hash, signature);
+    var time_verified = verify_time(server_time, client_time);
+    var chat_verify =  verify_chat_key(chat_key_4bytes);
     // username string
     var username_str = aesjs.utils.hex.fromBytes(public_key).slice(0, 20);
-    console.log(username_str, is_verified);
+    console.log(username_str, sig_verified, time_verified, chat_verify);
     if (username_str == "e0b1fe74117e1b95b608") { // pub key of empty string
       username_str = "79985aAnonymous"; // 507550 is hex for green
     }
     // date string
-    var date = new Date(Number(unpack_number(server_time_bytes)));
+    var date = new Date(Number(server_time));
     var today = new Date();
     if (date.toDateString() === today.toDateString()) {  // sent today
       var date_str = "";
@@ -241,7 +255,7 @@ main = function() {
     var padded_bytes = aes_cnt.decrypt(encrypted_bytes);
     var decrypted_bytes = padded_bytes.slice(0, -2*padded_bytes.slice(-1));
     var message_str = aesjs.utils.utf8.fromBytes(decrypted_bytes);
-    return build_message(username_str, date_str, message_str, is_verified);
+    return build_message(username_str, date_str, message_str, true);
   };
   function build_message(username_str, date_str, message_str, is_verified) {
     var msg_div = document.createElement("div");
@@ -356,17 +370,18 @@ main = function() {
     const time = Date.now();
     return pack_number(time, 8);
   };
-  function get_chat_id() {
+  function get_chat_key() {
     var title = get_title();
-    var chat_key = sha3_256.array(title);
-    return sha3_256.array(chat_key);
+    return sha3_256.array(title);
+  }
+  function get_chat_id() {
+    return sha3_256.array(get_chat_key());
   };
   function message_to_cypher() {
-    var title = get_title();        // known by peers
     var message = get_message();    // known by peers
     if (message == "") {return null;}
     var text_bytes = pad_message(message);
-    var chat_key = sha3_256.array(title);  // known by peers
+    var chat_key = get_chat_key();
     var cnt = new aesjs.Counter(1);
     var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, cnt);
     var encrypted_message = Array.from(aes_cnt.encrypt(text_bytes));
