@@ -72,7 +72,7 @@ main = function() {
   // *******************************OPEN_SOCKET********************************
   function open_socket() {
     set_status(1);
-    socket = new WebSocket("wss://" + location.host + "/ws");
+    socket = new WebSocket("ws://" + location.host + "/ws");
     socket.onopen = function() {
       console.log("socket opened"); 
       setTimeout(function() {loop = true;}, 1000);
@@ -104,7 +104,7 @@ main = function() {
     message_list_div.replaceChildren();
     max_message_id = Number.MIN_SAFE_INTEGER;
     min_message_id = Number.MAX_SAFE_INTEGER;
-  }
+  };
   // *********************************BUTTONS**********************************
   function toggle_loop() {
     if (socket.readyState != WebSocket.OPEN) {
@@ -115,7 +115,6 @@ main = function() {
       loop = !loop;
     }
   };
-
   // *********************************RECEVING*********************************
   function ws_receive(message_event) {
     var blob = message_event.data;
