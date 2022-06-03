@@ -103,6 +103,7 @@ fn main() {
         println!("Failed to bind TCP port. Exiting...");
         std::process::exit(3);
     });
+    println!("Using IP & port {}", IP_PORT);
 
     for stream in listener.incoming() {
         if let Ok(stream) = stream {
