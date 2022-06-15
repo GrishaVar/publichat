@@ -192,8 +192,8 @@ main = function() {
     }
   };
   function verify_time(server_time, client_time) {
-    var res = server_time >= client_time;  // st greater than ct
-    var res = res && (server_time-client_time < 1000*60*1); // max 1 min old
+    // server & client time stamp can have a max of 10 seconds difference
+    var res = Math.abs(server_time-client_time) < 1000*10;
     return res;
   };
   function verify_chat_key(chat_key_4bytes) {
