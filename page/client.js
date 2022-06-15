@@ -82,6 +82,10 @@ main = function() {
     socket.onclose = function(e) {shutdown(e)};
     socket.onmessage = function(e) {ws_receive(e)};
     reset_chat();
+
+    if (get_title() === "") {
+      landing_page();
+    }
   };
   function ws_send(bytes) {
     if (socket.readyState != WebSocket.OPEN) {
@@ -105,6 +109,7 @@ main = function() {
     max_message_id = Number.MIN_SAFE_INTEGER;
     min_message_id = Number.MAX_SAFE_INTEGER;
   };
+
   // *********************************BUTTONS**********************************
   function toggle_loop() {
     if (socket.readyState != WebSocket.OPEN) {
@@ -115,6 +120,7 @@ main = function() {
       loop = !loop;
     }
   };
+
   // *********************************RECEVING*********************************
   function ws_receive(message_event) {
     var blob = message_event.data;
@@ -297,10 +303,16 @@ main = function() {
     msg_div.appendChild(content_div);
     return msg_div;
   };
+
   // *********************************MAINLOOP*********************************
   function mainloop(old_title) {
     var title = get_title();
-    if (title == "" || loop == false) {
+    if (title == "") {
+      landing_page();
+      setTimeout(function() {mainloop(title);}, 1000);
+      return;
+    }
+    if (loop == false) {
       setTimeout(function() {mainloop(title);}, 1000);
       return;
     }
@@ -316,6 +328,11 @@ main = function() {
     setTimeout(function() {mainloop(title);}, 500);
   };
   
+  function landing_page() {
+    reset_chat();
+    admin_msg = build_message("660033ADMIN", "Today", "message_str", true);
+    message_list_div.appendChild(admin_msg);
+  }
   // *********************************QUERY/FETCH******************************
   function fetch_messages(title) {
     var chat_id = get_chat_id();
