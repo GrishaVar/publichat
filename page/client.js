@@ -21,6 +21,8 @@ main = function() {
   message_list_div.addEventListener("scroll", top_scroll_query);
   message_entry.addEventListener("keyup", keystroke_input);
   
+  const utf8decoder = new TextDecoder();
+  const utf8encoder = new TextEncoder();
   var reader = new FileReader();
   var socket = null;
   var loop = false;
@@ -253,7 +255,7 @@ main = function() {
     var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, cnt);
     var padded_bytes = aes_cnt.decrypt(encrypted_bytes);
     var decrypted_bytes = padded_bytes.slice(0, -2*padded_bytes.slice(-1));
-    var message_str = aesjs.utils.utf8.fromBytes(decrypted_bytes);
+    var message_str = utf8decoder.decode(decrypted_bytes);
     
     var sig_verified = verify_signature(public_key, bytes_hash, signature);
     var time_verified = verify_time(server_time, client_time);
@@ -354,7 +356,7 @@ main = function() {
     if (message.length % 2 == 1) { // add space for message of odd length
       message += ' ';
     }
-    var message = aesjs.utils.utf8.toBytes(message);
+    var message = utf8encoder.encode(message);
     
     var pad_lenght = message_content_lenght - message.length;
     var pad_character = Math.floor(pad_lenght/2);
