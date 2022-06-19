@@ -33,20 +33,27 @@
       return ((r*0.299 + g*0.587 + b*0.114) > 150) ? "#000000" : "#ffffff";
     }
 
+    var b64encode = function(d,a,e,b,c,f){c="";for(a=e=b=0;a<4*d.length/3;f=b>>2*(++a&3)&63,c+=String.fromCharCode(f+71-(f<26?6:f<52?0:f<62?75:f^63?90:87))+(75==(a-1)%76?"\r\n":""))a&3^3&&(b=b<<8^d[e++]);for(;a++&3;)c+="=";return c};
 
     function go() {
       let key = aesjs.utils.hex.fromBytes(get_chat_key());
       let id = aesjs.utils.hex.fromBytes(get_chat_id());
+      let key64 = b64encode(get_chat_key()).replaceAll('=','').replaceAll('/','_').replaceAll('+','-');
+      let id64 = b64encode(get_chat_id()).replaceAll('=','').replaceAll('/','_').replaceAll('+','-');
       document.getElementById("key-div").innerHTML = "key: " + key;
       document.getElementById("id-div").innerHTML = "id : " + id;
+      document.getElementById("key-div-64").innerHTML = "key64: " + key64;
+      document.getElementById("id-div-64").innerHTML = "id64 : " + id64;
 
       var secret = get_password();
       var username_str = aesjs.utils.hex.fromBytes(get_public_key(secret));
+      let username_b64 = b64encode(get_public_key(secret)).replaceAll('=','').replaceAll('/','_').replaceAll('+','-');
       if (username_str == "e0b1fe74117e1b95b608") { // pub key of empty string
         username_str = "79985aAnonymous"; // 507550 is hex for green
       }
 
       document.getElementById("password-full-hex-div").innerHTML = "hexcode: " + username_str;
+      document.getElementById("password-full-b64-div").innerHTML = "b64code: " + username_b64;
 
       var bg_colour = "#" + username_str.slice(0,6);
       document.getElementById("password-hex-div").style.background = bg_colour;
@@ -98,8 +105,13 @@
     <input id="title" type="text" placeholder="Title" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     <div id="key-div" style="font-family: monospace, monospace;">key:</div>
     <div id="id-div" style="font-family: monospace, monospace;">id :</div>
+    <br>
+    <div id="key-div-64" style="font-family: monospace, monospace;">key64:</div>
+    <div id="id-div-64" style="font-family: monospace, monospace;">id64 :</div>
+    <br>
     <input id="password" type="text" placeholder="Username" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     <div id="password-full-hex-div" style="font-family: monospace, monospace;">hexcode:</div>
+    <div id="password-full-b64-div" style="font-family: monospace, monospace;">b64code:</div>
     <div id="password-hex-div" style="font-family: monospace, monospace;">display:</div>
     <br>
     <button id="button"> GO! </button>
