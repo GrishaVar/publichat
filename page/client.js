@@ -1,14 +1,15 @@
 main = function() {
+  const landing_page_str = ['Test 1', 'test 2'];
+  const message_byte_size = 512;
+  const message_content_lenght = 396;
+  const cypher_length = message_content_lenght + 4 + 8 + 32;
+  const fch_pad = [102,  99, 104];  // "fch"
+  const qry_pad = [113, 114, 121];  // "qry"
+  const snd_pad = [115, 110, 100];  // "snd"
+  const end_pad = [101, 110, 100];  // "end"
+  const rcv_pad = [109, 115, 103];  // "msg"
   var max_message_id = Number.MIN_SAFE_INTEGER;
   var min_message_id = Number.MAX_SAFE_INTEGER;
-  var message_byte_size = 512;
-  var message_content_lenght = 396;
-  var cypher_length = message_content_lenght + 4 + 8 + 32;
-  var fch_pad = [102,  99, 104];  // "fch"
-  var qry_pad = [113, 114, 121];  // "qry"
-  var snd_pad = [115, 110, 100];  // "snd"
-  var end_pad = [101, 110, 100];  // "end"
-  var rcv_pad = [109, 115, 103];  // "msg"
   var chat_id_hash = [];  // hash of current chat id
   var style = getComputedStyle(document.body);
   var send_button = document.getElementById("send_button");
@@ -330,11 +331,14 @@ main = function() {
   
   function landing_page() {
     reset_chat();
-    admin_msg = build_message("660033ADMIN", "Today", "message_str", true);
-    message_list_div.appendChild(admin_msg);
+    for (let msg_str of landing_page_str) {
+      message_list_div.appendChild(
+        build_message("ff1133ADMIN", "2022/03/01 13:37", msg_str, true)
+      );
+    }
   }
   // *********************************QUERY/FETCH******************************
-  function fetch_messages(title) {
+  function fetch_messages() {
     var chat_id = get_chat_id();
     chat_id_hash = chat_id;
     ws_send([].concat(fch_pad, chat_id, end_pad));
