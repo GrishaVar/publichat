@@ -21,6 +21,7 @@ pub struct Globals {  // owns all its data!
 }
 
 pub const FILE_FAVICON_ICO: &[u8] = include_bytes!("../page/favicon.ico");
+pub const FILE_TOOLS_HTML: &[u8] = include_bytes!("../page/tools.html");  // TODO: minify?
 
 // I believe there is no nice way of doing this
 // no minify, no tls

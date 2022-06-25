@@ -83,6 +83,8 @@ pub fn handle(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
             .map_err(|_| "Failed to send mobile.html"),
         "/ws"            => handle_ws(req, stream, globals),  // start WS
         "/robots.txt"    => handle_robots(&mut stream),
+        "/tools"         => send_data(200, FILE_TOOLS_HTML, &mut stream)
+            .map_err(|_| "Failed to send 404"),
         "/version"       => handle_version(&mut stream, globals),
         _                => send_data(404, FILE_404_HTML, &mut stream)
             .map_err(|_| "Failed to send 404"),
