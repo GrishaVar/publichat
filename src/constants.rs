@@ -34,7 +34,7 @@ pub const MSG_ID_SIZE: usize = QUERY_ARG_SIZE - 1;
 //pub const QUERY_DIRECTION_COUNT: usize = QUERY_ARG_SIZE - MSG_ID_SIZE;
 
 pub const MAX_FETCH_AMOUNT: u8 = 50;
-pub const DEFAULT_FETCH_AMOUNT: u8 = 50;
+pub const DEFAULT_FETCH_AMOUNT: u8 = 25;
 
 pub type Hash       = [u8; CHAT_ID_SIZE];
 pub type Cypher     = [u8; CYPHER_SIZE];
