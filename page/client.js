@@ -2,8 +2,8 @@ main = function() {
   var max_message_id = Number.MIN_SAFE_INTEGER;
   var min_message_id = Number.MAX_SAFE_INTEGER;
   var message_byte_size = 512;
-  var message_content_lenght = 396;
-  var cypher_length = message_content_lenght + 4 + 8 + 32;
+  var message_content_length = 396;
+  var cypher_length = message_content_length + 4 + 8 + 32;
   var fch_pad = [102,  99, 104];  // "fch"
   var qry_pad = [113, 114, 121];  // "qry"
   var snd_pad = [115, 110, 100];  // "snd"
@@ -187,8 +187,7 @@ main = function() {
     var ec = new elliptic.eddsa('ed25519');
     var key = ec.keyFromPublic(pub_key_bytes, 'bytes');
     try {
-      key.verify(hash, signature);
-      return true;
+      return key.verify(hash, signature);
     } catch(e) {
       return false;
     }
@@ -206,33 +205,23 @@ main = function() {
     }
     return res;
   }
-  function make_verify_mark(is_verified) {
-    var main_div = document.createElement("div");
-    var circle = document.createElement("div");
-    var stem = document.createElement("div");
-    var kick = document.createElement("div");
-    main_div.className = "checkmark";
-    circle.className = "checkmark_circle";
-    stem.className = "checkmark_stem";
-    kick.className = "checkmark_kick";
-    var checkmark_colour = "--status_err"
-    if (is_verified) {
-      checkmark_colour = "--status_ok"
-    }
-    circle.style.background = style.getPropertyValue(checkmark_colour);
-    main_div.appendChild(circle);
-    main_div.appendChild(stem);
-    main_div.appendChild(kick);
-    return main_div;
-  };
   function bytes_to_message(bytes) {
+    // Break message server side
     var server_time = unpack_number(bytes.splice(0, 8)); // 8 bytes
-    var bytes_hash = sha3_256.array(bytes.slice(0, cypher_length));
-    var chat_key_4bytes = bytes.splice(0, 4); // 4 bytes
-    var client_time = unpack_number(bytes.splice(0, 8)); // 8 bytes
-    var public_key = bytes.splice(0, 32); // 32 bytes
-    var encrypted_bytes = bytes.splice(0, message_content_lenght);
+    var cypher_block = bytes.splice(0, cypher_length); // 440 needs splicing
     var signature = bytes.splice(0, 64);
+    var bytes_hash = sha3_256.array(cypher_block);
+
+    // decrypt message
+    var cnt = new aesjs.Counter(1);
+    var aes_cnt = new aesjs.ModeOfOperation.ctr(get_chat_key(), cnt);
+    var decrypted_bytes = Array.from(aes_cnt.decrypt(cypher_block));
+
+    // Break message client side
+    var chat_key_4bytes = decrypted_bytes.splice(0, 4); // 4 bytes
+    var client_time = unpack_number(decrypted_bytes.splice(0, 8)); // 8 bytes
+    var public_key = decrypted_bytes.splice(0, 32); // 32 bytes
+    var padded_bytes = decrypted_bytes.splice(0, message_content_length);// 396
     // username string
     var username_str = aesjs.utils.hex.fromBytes(public_key).slice(0, 20);
     if (username_str == "e0b1fe74117e1b95b608") { // pub key of empty string
@@ -249,38 +238,24 @@ main = function() {
       var date_str = date.toLocaleString().slice(0,-10);  // date < this year
     }
     date_str += " " + date.toLocaleTimeString().slice(0,-3);
-    // message string
-    var chat_key = get_chat_key();
-    var cnt = new aesjs.Counter(1);
-    var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, cnt);
-    var padded_bytes = aes_cnt.decrypt(encrypted_bytes);
-    var decrypted_bytes = padded_bytes.slice(0, -2*padded_bytes.slice(-1));
-    var message_str = utf8decoder.decode(decrypted_bytes);
+    // message string remove padding
+    var message_bytes = padded_bytes.slice(0, -2*padded_bytes.slice(-1));
+    var message_str = utf8decoder.decode(new Uint8Array(message_bytes));
     
-    var sig_verified = verify_signature(public_key, bytes_hash, signature);
-    var time_verified = verify_time(server_time, client_time);
-    var chat_verified =  verify_chat_key(chat_key_4bytes);
-    var is_verified = false;
-    if (sig_verified && time_verified && chat_verified) {
-      is_verified = true;
-    } else {
-      console.log(
-        "Message: ", message_str,
-        "\nfrom: ", username_str,
-        "\nCould not be verified because:",
-        "\nSignautre check: ", sig_verified,
-        "\nTime check: ", time_verified,
-        "\nChat check: ", chat_verified,
-      );
-    }
-    return build_message(username_str, date_str, message_str, is_verified);
+    var [msg_div, sig_div] = build_msg(username_str, date_str, message_str);
+    setTimeout(
+      ()=>verify_message(
+        sig_div, public_key, bytes_hash, signature, 
+        server_time, client_time, chat_key_4bytes
+      ), 0
+    );  // this is to make the singature checking async to the building of msg
+    return msg_div; 
   };
-  function build_message(username_str, date_str, message_str, is_verified) {
+  function build_msg(username_str, date_str, message_str) {
     var msg_div = document.createElement("div");
     var usr_div = document.createElement("div");
     var time_div = document.createElement("div");
     var content_div = document.createElement("div");
-    var checkmark_div = make_verify_mark(is_verified);
 
     msg_div.className = "message";
     usr_div.className = "username";
@@ -292,12 +267,54 @@ main = function() {
     usr_div.style.color = white_or_black(bg_colour);  // selects best contrast
     usr_div.innerHTML = username_str.slice(6);
     time_div.innerHTML = date_str;
-    time_div.appendChild(checkmark_div);
     content_div.innerHTML = message_str;
     msg_div.appendChild(usr_div);
     msg_div.appendChild(time_div);
     msg_div.appendChild(content_div);
-    return msg_div;
+    return [msg_div, time_div];
+  };
+  function verify_message(
+    time_div, public_key, bytes_hash, signature, 
+    server_time, client_time, chat_key_4bytes
+  ) {
+    // Verifies the time, sign., and chat id
+    // also adds checkmark to each message
+    var sig_verified = verify_signature(public_key, bytes_hash, signature);
+    var time_verified = verify_time(server_time, client_time);
+    var chat_verified =  verify_chat_key(chat_key_4bytes);
+    var is_verified = false;
+    if (sig_verified && time_verified && chat_verified) {
+      is_verified = true;
+    } else {
+      console.log(
+        "Message from: ", aesjs.utils.hex.fromBytes(public_key).slice(0, 20),
+        "\nCould not be verified because:",
+        "\nSignature check: ", sig_verified,
+        "\nTime check: ", time_verified,
+        "\nChat check: ", chat_verified,
+      );
+    }
+    time_div.appendChild(make_verify_mark(is_verified));
+  };
+  function make_verify_mark(is_verified) {
+    var main_div = document.createElement("div");
+    var circle = document.createElement("div");
+    var stem = document.createElement("div");
+    var kick = document.createElement("div");
+    main_div.className = "checkmark";
+    circle.className = "checkmark_circle";
+    stem.className = "checkmark_stem";
+    kick.className = "checkmark_kick";
+
+    var checkmark_colour = "--status_ok";
+    if (!is_verified) {
+      checkmark_colour = "--status_err";
+    }
+    circle.style.background = style.getPropertyValue(checkmark_colour);
+    main_div.appendChild(circle);
+    main_div.appendChild(stem);
+    main_div.appendChild(kick);
+    return main_div;
   };
   // *********************************MAINLOOP*********************************
   function mainloop(old_title) {
@@ -342,9 +359,9 @@ main = function() {
   // *********************************SENDING**********************************
   function send_message() {
     var chat_id = get_chat_id();
-    var cypher = message_to_cypher();
+    var cypher = create_cypher_block();
     if (cypher == null) {return;}
-    // counter_div.textContent = "0/" + message_content_lenght;
+    // counter_div.textContent = "0/" + message_content_length;
   
     var signature = sign(cypher);
     outbound_bytes = [].concat(snd_pad, chat_id, cypher, signature, end_pad);
@@ -358,11 +375,11 @@ main = function() {
     }
     var message = utf8encoder.encode(message);
     
-    var pad_lenght = message_content_lenght - message.length;
+    var pad_lenght = message_content_length - message.length;
     var pad_character = Math.floor(pad_lenght/2);
     var padding = Array(pad_lenght).fill(pad_character);
     // concatinate the arrays
-    var padded_message = new Uint8Array(message_content_lenght);
+    var padded_message = new Uint8Array(message_content_length);
     padded_message.set(message);
     padded_message.set(padding, message.length);
     return padded_message;
@@ -393,24 +410,20 @@ main = function() {
   function get_chat_id() {
     return sha3_256.array(get_chat_key());
   };
-  function message_to_cypher() {
+  function create_cypher_block() {
     var message = get_message();    // known by peers
     if (message == "") {return null;}
-    var text_bytes = pad_message(message);
+    // other stuff
     var chat_key = get_chat_key();
+    var message_data = [].concat(
+      chat_key.slice(0,4),        // 4 bytes
+      get_time_array(),           // 8 bytes
+      get_public_key(),           // 32 bytes
+      ...pad_message(message)     // 396 bytes
+    );
     var cnt = new aesjs.Counter(1);
     var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, cnt);
-    var encrypted_message = Array.from(aes_cnt.encrypt(text_bytes));
-    // other stuff
-    var chat_key_4bytes = chat_key.slice(0,4);  // known by peers
-    var client_time = get_time_array();
-    var public_key = get_public_key();
-    return [].concat(
-      chat_key_4bytes,
-      client_time, 
-      public_key, 
-      encrypted_message
-    );
+    return Array.from(aes_cnt.encrypt(message_data));
   };
 
   // *******************************CHAR_COUNTER*******************************
@@ -420,8 +433,8 @@ main = function() {
     if(event.keyCode === 13) {send_message();}
     // update colour and value of message length counter
     var textLength = message_entry.value.length;
-    //counter_div.textContent = textLength + "/" + (message_content_lenght-1);
-    if(textLength >= message_content_lenght-1){
+    //counter_div.textContent = textLength + "/" + (message_content_length-1);
+    if(textLength >= message_content_length-1){
       sending_div.style.borderColor = style.getPropertyValue("--status_err");
       send_button.style.background = style.getPropertyValue("--status_err");
       //counter_div.style.color = "#ff2851";

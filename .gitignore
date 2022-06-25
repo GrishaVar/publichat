@@ -4,3 +4,4 @@ page/final/*
 *.msgs
 data/*
 dataold/
+server_data.txt
