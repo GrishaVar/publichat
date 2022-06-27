@@ -1,4 +1,4 @@
-use std::{net::{TcpListener, TcpStream}, path::Path, sync::Arc, thread::{self, Builder}};
+use std::{net::{TcpListener, TcpStream, ToSocketAddrs}, path::Path, sync::Arc, thread::{self, Builder}};
 
 mod db;
 mod constants;
@@ -9,7 +9,7 @@ mod helpers;
 
 use helpers::*;
 
-const IP_PORT: &str = "localhost:7878";
+const IP_PORT_DEFAULT: &str = "localhost:7878";
 
 
 fn handle_incoming(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
@@ -48,11 +48,12 @@ fn handle_incoming(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
 }
 
 fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+
     let globals = {
 
-        // Get chat directory path
+        // Get chat directory path (last argument)
         let data_dir = {
-            let args: Vec<String> = std::env::args().skip(1).collect();
             if let Some(path) = args.last() {
                 let path = Path::new(path);
                 if !path.is_dir() {
@@ -97,11 +98,29 @@ fn main() {
         })
     };
 
-    let listener = TcpListener::bind(IP_PORT).unwrap_or_else(|_| {
-        println!("Failed to bind TCP port. Exiting...");
-        std::process::exit(1);
-    });
-    println!("Using IP & port {}", IP_PORT);
+    let listener = {
+        // try to get address from second-to-last arg
+        let addr = args.iter().rev().nth(1).ok_or("Address not given in args")
+            .and_then(|arg| arg.to_socket_addrs()
+                .map_err(|e| {println!("\t{e}"); "Invalid addr, see above"}))
+            .and_then(|mut addrs| addrs.next().ok_or("Empty addr iterator?"))
+            .unwrap_or_else(|e| {
+                println!("{e}; using default socket address...");
+                IP_PORT_DEFAULT.to_socket_addrs().ok()
+                    .and_then(|mut addrs| addrs.next())
+                    .unwrap_or_else(|| {
+                        println!("Failed to create socket address from default!");
+                        println!("Why is {IP_PORT_DEFAULT} an invalid socket addr?");
+                        std::process::exit(1);
+                    })
+            });
+
+        TcpListener::bind(addr).unwrap_or_else(|_| {
+            println!("Failed to bind TCP port. Exiting...");
+            std::process::exit(1);
+        })
+    };
+    println!("Running on {}", listener.local_addr().unwrap());
 
     for stream in listener.incoming() {
         if let Ok(stream) = stream {
