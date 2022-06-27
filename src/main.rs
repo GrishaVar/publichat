@@ -62,7 +62,7 @@ fn main() {
                 path.to_path_buf()  // put on heap
             } else {
                 println!("No path given");
-                std::process::exit(2);
+                std::process::exit(1);
             }
         };
         println!("Using directory {:?}", data_dir.canonicalize().unwrap());
@@ -74,7 +74,7 @@ fn main() {
                 .output()
                 .unwrap_or_else(|_| {
                     println!("Failed to exec git command");
-                    std::process::exit(3);
+                    std::process::exit(1);
                 });
 
             let git_output = output.stdout;  // has a \n at the end!
@@ -82,7 +82,7 @@ fn main() {
                 || *git_output.last().unwrap() != b'\n'
                 || std::str::from_utf8(&git_output).is_err() {
                     println!("Received strange data from git");
-                    std::process::exit(4);
+                    std::process::exit(1);
                 }
 
             let mut git_hash = [0; 40];
@@ -99,7 +99,7 @@ fn main() {
 
     let listener = TcpListener::bind(IP_PORT).unwrap_or_else(|_| {
         println!("Failed to bind TCP port. Exiting...");
-        std::process::exit(3);
+        std::process::exit(1);
     });
     println!("Using IP & port {}", IP_PORT);
 
