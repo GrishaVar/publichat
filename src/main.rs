@@ -73,8 +73,8 @@ fn main() {
             let output = std::process::Command::new("git")
                 .args(["rev-parse", "HEAD"])
                 .output()
-                .unwrap_or_else(|_| {
-                    println!("Failed to exec git command");
+                .unwrap_or_else(|e| {
+                    println!("Failed to exec git command:\n\t{e}");
                     std::process::exit(1);
                 });
 
@@ -115,8 +115,8 @@ fn main() {
                     })
             });
 
-        TcpListener::bind(addr).unwrap_or_else(|_| {
-            println!("Failed to bind TCP port. Exiting...");
+        TcpListener::bind(addr).unwrap_or_else(|e| {
+            println!("Failed to bind TCP address {addr}:\n\t{e}");
             std::process::exit(1);
         })
     };
