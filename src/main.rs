@@ -17,10 +17,8 @@ fn handle_incoming(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
 
     let mut http_handled: u8 = 0;
     while {  // Handle repeated HTTP requests
-        println!("trying to read...");
         stream.peek(&mut pad_buf)
             .map_err(|_| "Failed to read protocol header (HTTP timeout?)")?;
-        println!("done reading!");
         &pad_buf == b"GET "
     } {
         http::handle(
@@ -116,15 +114,15 @@ fn main() {
 
             let builder = Builder::new().name(name);  // todo: stack size?
             let handle = builder.spawn(move || {
-                println!("Started  {}", thread::current().name().unwrap());
+                println!("Handling {}", thread::current().name().unwrap());
                 if let Err(e) = handle_incoming(stream, &globals) {
                     println!(
-                        "Thread {} finished with error:\n\t{e}",
+                        "Finished {} with:\n\t{e}",
                         thread::current().name().unwrap(),
                     );
                 } else {
                     println!(
-                        "Finished {} (no errors)",
+                        "Finished {} (no message)",
                         thread::current().name().unwrap(),
                     );
                 }
