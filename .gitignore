@@ -1,7 +1,7 @@
 /target
 .DS_Store
-page/send_icon.psd
+page/final/*
 *.msgs
-page/colour.png
-page/colour2.png
 data/*
+dataold/
+server_data.txt

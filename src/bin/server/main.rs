@@ -1,4 +1,4 @@
-use std::{net::{TcpListener, TcpStream}, path::Path, sync::Arc, thread::{self, Builder}};
+use std::{net::{TcpListener, TcpStream, ToSocketAddrs}, path::Path, sync::Arc, thread::{self, Builder}};
 
 mod db;
 mod http;
@@ -7,7 +7,7 @@ mod ws;
 
 use publichat::helpers::*;
 
-const IP_PORT: &str = "localhost:7878";
+const IP_PORT_DEFAULT: &str = "localhost:7878";
 
 
 fn handle_incoming(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
@@ -15,10 +15,8 @@ fn handle_incoming(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
 
     let mut http_handled: u8 = 0;
     while {  // Handle repeated HTTP requests
-        println!("trying to read...");
         stream.peek(&mut pad_buf)
             .map_err(|_| "Failed to read protocol header (HTTP timeout?)")?;
-        println!("done reading!");
         &pad_buf == b"GET "
     } {
         http::handle(
@@ -48,11 +46,12 @@ fn handle_incoming(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
 }
 
 fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+
     let globals = {
 
-        // Get chat directory path
+        // Get chat directory path (last argument)
         let data_dir = {
-            let args: Vec<String> = std::env::args().skip(1).collect();
             if let Some(path) = args.last() {
                 let path = Path::new(path);
                 if !path.is_dir() {
@@ -62,7 +61,7 @@ fn main() {
                 path.to_path_buf()  // put on heap
             } else {
                 println!("No path given");
-                std::process::exit(2);
+                std::process::exit(1);
             }
         };
         println!("Using directory {:?}", data_dir.canonicalize().unwrap());
@@ -72,9 +71,9 @@ fn main() {
             let output = std::process::Command::new("git")
                 .args(["rev-parse", "HEAD"])
                 .output()
-                .unwrap_or_else(|_| {
-                    println!("Failed to exec git command");
-                    std::process::exit(3);
+                .unwrap_or_else(|e| {
+                    println!("Failed to exec git command:\n\t{e}");
+                    std::process::exit(1);
                 });
 
             let git_output = output.stdout;  // has a \n at the end!
@@ -82,7 +81,7 @@ fn main() {
                 || *git_output.last().unwrap() != b'\n'
                 || std::str::from_utf8(&git_output).is_err() {
                     println!("Received strange data from git");
-                    std::process::exit(4);
+                    std::process::exit(1);
                 }
 
             let mut git_hash = [0; 40];
@@ -97,10 +96,29 @@ fn main() {
         })
     };
 
-    let listener = TcpListener::bind(IP_PORT).unwrap_or_else(|_| {
-        println!("Failed to bind TCP port. Exiting...");
-        std::process::exit(3);
-    });
+    let listener = {
+        // try to get address from second-to-last arg
+        let addr = args.iter().rev().nth(1).ok_or("Address not given in args")
+            .and_then(|arg| arg.to_socket_addrs()
+                .map_err(|e| {println!("\t{e}"); "Invalid addr, see above"}))
+            .and_then(|mut addrs| addrs.next().ok_or("Empty addr iterator?"))
+            .unwrap_or_else(|e| {
+                println!("{e}; using default socket address...");
+                IP_PORT_DEFAULT.to_socket_addrs().ok()
+                    .and_then(|mut addrs| addrs.next())
+                    .unwrap_or_else(|| {
+                        println!("Failed to create socket address from default!");
+                        println!("Why is {IP_PORT_DEFAULT} an invalid socket addr?");
+                        std::process::exit(1);
+                    })
+            });
+
+        TcpListener::bind(addr).unwrap_or_else(|e| {
+            println!("Failed to bind TCP address {addr}:\n\t{e}");
+            std::process::exit(1);
+        })
+    };
+    println!("Running on {}", listener.local_addr().unwrap());
 
     for stream in listener.incoming() {
         if let Ok(stream) = stream {
@@ -113,15 +131,15 @@ fn main() {
 
             let builder = Builder::new().name(name);  // todo: stack size?
             let handle = builder.spawn(move || {
-                println!("Started  {}", thread::current().name().unwrap());
+                println!("Handling {}", thread::current().name().unwrap());
                 if let Err(e) = handle_incoming(stream, &globals) {
                     println!(
-                        "Thread {} finished with error:\n\t{e}",
+                        "Finished {} with:\n\t{e}",
                         thread::current().name().unwrap(),
                     );
                 } else {
                     println!(
-                        "Finished {} (no errors)",
+                        "Finished {} (no message)",
                         thread::current().name().unwrap(),
                     );
                 }

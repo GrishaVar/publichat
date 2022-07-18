@@ -37,7 +37,7 @@ pub fn hash_twice(title: &[u8]) -> (Hash, Hash) {
 type AesCtr = Ctr128BE<Aes256>;
 const IV: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
 
-pub fn apply_aes(key: &Hash, buf: &mut Contents) {
+pub fn apply_aes(key: &Hash, buf: &mut Cypher) {
     let mut cypher = AesCtr::new(key.into(), &IV.into());
     cypher.apply_keystream(buf);
 }

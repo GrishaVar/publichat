@@ -1,8 +1,9 @@
 main = function() {
   var max_message_id = Number.MIN_SAFE_INTEGER;
   var min_message_id = Number.MAX_SAFE_INTEGER;
-  var message_byte_size = 168;
-  var message_content_lenght = 128;
+  var message_byte_size = 512;
+  var message_content_length = 396;
+  var cypher_length = message_content_length + 4 + 8 + 32;
   var fch_pad = [102,  99, 104];  // "fch"
   var qry_pad = [113, 114, 121];  // "qry"
   var snd_pad = [115, 110, 100];  // "snd"
@@ -18,8 +19,10 @@ main = function() {
   send_button.onclick = function() {send_message()};
   socket_button.onclick = function() {toggle_loop();};
   message_list_div.addEventListener("scroll", top_scroll_query);
-  message_entry.addEventListener("keyup",keystroke_input);
+  message_entry.addEventListener("keyup", keystroke_input);
   
+  const utf8decoder = new TextDecoder();
+  const utf8encoder = new TextEncoder();
   var reader = new FileReader();
   var socket = null;
   var loop = false;
@@ -31,7 +34,7 @@ main = function() {
   function get_message(){return message_entry.value;}
   
   function unpack_number(bytes) {
-    res = 0;
+    var res = 0;
     for (var i = 0; i<bytes.length; i++) {
       res *= 256;  // same as res << 8 but also works for number > 32 bit
       res += bytes[i];
@@ -39,13 +42,15 @@ main = function() {
     return res;
   };
   function pack_number(num, size) {
-    res = []
+    var res = [];
     var num_copy = num;
     for (var i = 0; i<size; i++) {
       res.unshift(num & 0xff);
-      num = num >>> 8;
+      num = Math.floor(num / 256); // same as >> 8 but works for ints > 32 bit
     }
-    if (num > 0) {console.log("warning: num too big for array", num_copy, size)}
+    if (num > 0) {
+      console.log("warning: num too big for array", num_copy, size)
+    }
     return res;
   };
   function white_or_black(colour) {  // which text colour gives more contrast
@@ -54,6 +59,7 @@ main = function() {
     var b = parseInt(colour.slice(5,7), 16);
     return ((r*0.299 + g*0.587 + b*0.114) > 150) ? "#000000" : "#ffffff";
   }
+
   // *******************************SET_STATUS*********************************
   function set_status(value) {
     if (value == 0) { // good = 0; wait = 1; error = 2;
@@ -63,12 +69,12 @@ main = function() {
     } else {
       socket_button.style.background = style.getPropertyValue("--status_err");
     }
-  }
+  };
 
   // *******************************OPEN_SOCKET********************************
   function open_socket() {
     set_status(1);
-    socket = new WebSocket("wss://" + location.host + "/ws");
+    socket = new WebSocket("ws://" + location.host + "/ws");
     socket.onopen = function() {
       console.log("socket opened"); 
       setTimeout(function() {loop = true;}, 1000);
@@ -100,7 +106,7 @@ main = function() {
     message_list_div.replaceChildren();
     max_message_id = Number.MIN_SAFE_INTEGER;
     min_message_id = Number.MAX_SAFE_INTEGER;
-  }
+  };
   // *********************************BUTTONS**********************************
   function toggle_loop() {
     if (socket.readyState != WebSocket.OPEN) {
@@ -111,13 +117,11 @@ main = function() {
       loop = !loop;
     }
   };
-
   // *********************************RECEVING*********************************
   function ws_receive(message_event) {
     var blob = message_event.data;
     reader.readAsArrayBuffer(blob);
   };
-
   reader.onload = function() {
     set_status(1);  // yellow button top left
     var result = reader.result;
@@ -163,54 +167,91 @@ main = function() {
       scroll_target = message_list_div.children[0];
       while (bytes.length > 0) {
         var single_message = bytes.splice(-message_byte_size);
-        bytes_to_message(single_message, build_upwards);
+        new_message_div = bytes_to_message(single_message);
+        message_list_div.prepend(new_message_div);
       }
     } else { // insert at bottom; read messages normally
       while (bytes.length > 0) {
         var single_message = bytes.splice(0, message_byte_size);
-        scroll_target = bytes_to_message(single_message, build_upwards);
+        new_message_div = bytes_to_message(single_message);
+        message_list_div.appendChild(new_message_div);
+        scroll_target = new_message_div;
       }
     }
-
     // scroll to bottom if user is already at bottom
     if ((scroll_down || scroll_up) && scroll_target != null) {
       scroll_target.scrollIntoView();
     }
   };
-  function bytes_to_message(bytes, upwards) {
-    //message:Time, USER ID, Message cypher, Signature
-    var time = unpack_number(bytes.splice(0, 8)); // 8 bytes
-    var user_id = aesjs.utils.hex.fromBytes(bytes.splice(0, 32)); // 32 bytes
-    var encrypted_bytes = bytes.splice(0, 128);
-    //var Signature = bytes.splice(0, 128);   // veryify this at some point*/
+  function verify_signature(pub_key_bytes, hash, signature) {
+    var ec = new elliptic.eddsa('ed25519');
+    var key = ec.keyFromPublic(pub_key_bytes, 'bytes');
+    try {
+      return key.verify(hash, signature);
+    } catch(e) {
+      return false;
+    }
+  };
+  function verify_time(server_time, client_time) {
+    // server & client time stamp can have a max of 10 seconds difference
+    var res = Math.abs(server_time-client_time) < 1000*10;
+    return res;
+  };
+  function verify_chat_key(chat_key_4bytes) {
+    var expected = get_chat_key().splice(0,4);
+    var res = true;
+    for (let i = 0; i < chat_key_4bytes.length; i++) {
+      res = res && (expected[i] == chat_key_4bytes[i]);
+    }
+    return res;
+  }
+  function bytes_to_message(bytes) {
+    // Break message server side
+    var server_time = unpack_number(bytes.splice(0, 8)); // 8 bytes
+    var cypher_block = bytes.splice(0, cypher_length); // 440 needs splicing
+    var signature = bytes.splice(0, 64);
+    var bytes_hash = sha3_256.array(cypher_block);
 
+    // decrypt message
+    var cnt = new aesjs.Counter(1);
+    var aes_cnt = new aesjs.ModeOfOperation.ctr(get_chat_key(), cnt);
+    var decrypted_bytes = Array.from(aes_cnt.decrypt(cypher_block));
+
+    // Break message client side
+    var chat_key_4bytes = decrypted_bytes.splice(0, 4); // 4 bytes
+    var client_time = unpack_number(decrypted_bytes.splice(0, 8)); // 8 bytes
+    var public_key = decrypted_bytes.splice(0, 32); // 32 bytes
+    var padded_bytes = decrypted_bytes.splice(0, message_content_length);// 396
     // username string
-    var username_str = user_id.slice(0,20); // is user empty hash sha3("") ?
-    if (username_str == "a7ffc6f8bf1ed76651c1"){
+    var username_str = aesjs.utils.hex.fromBytes(public_key).slice(0, 20);
+    if (username_str == "e0b1fe74117e1b95b608") { // pub key of empty string
       username_str = "79985aAnonymous"; // 507550 is hex for green
     }
     // date string
-    var date = new Date(Number(time));
+    var date = new Date(Number(server_time));
     var today = new Date();
     if (date.toDateString() === today.toDateString()) {  // sent today
       var date_str = "";
-    } else if (date.getFullYear() === today.getFullYear()){  // sent this year
+    } else if (date.getFullYear() === today.getFullYear()) {  // sent this year
       var date_str = date.toLocaleString().slice(0,-15);
     } else {
       var date_str = date.toLocaleString().slice(0,-10);  // date < this year
     }
     date_str += " " + date.toLocaleTimeString().slice(0,-3);
-    // message string
-    var title = get_title();
-    var chat_key = sha3_256.array(title);
-    var cnt = new aesjs.Counter(1);
-    var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, cnt);
-    var padded_bytes = aes_cnt.decrypt(encrypted_bytes);
-    var decrypted_bytes = padded_bytes.slice(0, -padded_bytes.slice(-1));
-    var message_str = aesjs.utils.utf8.fromBytes(decrypted_bytes);
-    return build_message(username_str, date_str, message_str, upwards);
+    // message string remove padding
+    var message_bytes = padded_bytes.slice(0, -2*padded_bytes.slice(-1));
+    var message_str = utf8decoder.decode(new Uint8Array(message_bytes));
+    
+    var [msg_div, sig_div] = build_msg(username_str, date_str, message_str);
+    setTimeout(
+      ()=>verify_message(
+        sig_div, public_key, bytes_hash, signature, 
+        server_time, client_time, chat_key_4bytes
+      ), 0
+    );  // this is to make the singature checking async to the building of msg
+    return msg_div; 
   };
-  function build_message(username_str, date_str, message_str, upwards) {
+  function build_msg(username_str, date_str, message_str) {
     var msg_div = document.createElement("div");
     var usr_div = document.createElement("div");
     var time_div = document.createElement("div");
@@ -227,16 +268,53 @@ main = function() {
     usr_div.innerHTML = username_str.slice(6);
     time_div.innerHTML = date_str;
     content_div.innerHTML = message_str;
-
     msg_div.appendChild(usr_div);
     msg_div.appendChild(time_div);
     msg_div.appendChild(content_div);
-    if (upwards) {
-      message_list_div.prepend(msg_div);
+    return [msg_div, time_div];
+  };
+  function verify_message(
+    time_div, public_key, bytes_hash, signature, 
+    server_time, client_time, chat_key_4bytes
+  ) {
+    // Verifies the time, sign., and chat id
+    // also adds checkmark to each message
+    var sig_verified = verify_signature(public_key, bytes_hash, signature);
+    var time_verified = verify_time(server_time, client_time);
+    var chat_verified =  verify_chat_key(chat_key_4bytes);
+    var is_verified = false;
+    if (sig_verified && time_verified && chat_verified) {
+      is_verified = true;
     } else {
-      message_list_div.appendChild(msg_div);
+      console.log(
+        "Message from: ", aesjs.utils.hex.fromBytes(public_key).slice(0, 20),
+        "\nCould not be verified because:",
+        "\nSignature check: ", sig_verified,
+        "\nTime check: ", time_verified,
+        "\nChat check: ", chat_verified,
+      );
     }
-    return msg_div;
+    time_div.appendChild(make_verify_mark(is_verified));
+  };
+  function make_verify_mark(is_verified) {
+    var main_div = document.createElement("div");
+    var circle = document.createElement("div");
+    var stem = document.createElement("div");
+    var kick = document.createElement("div");
+    main_div.className = "checkmark";
+    circle.className = "checkmark_circle";
+    stem.className = "checkmark_stem";
+    kick.className = "checkmark_kick";
+
+    var checkmark_colour = "--status_ok";
+    if (!is_verified) {
+      checkmark_colour = "--status_err";
+    }
+    circle.style.background = style.getPropertyValue(checkmark_colour);
+    main_div.appendChild(circle);
+    main_div.appendChild(stem);
+    main_div.appendChild(kick);
+    return main_div;
   };
   // *********************************MAINLOOP*********************************
   function mainloop(old_title) {
@@ -247,26 +325,24 @@ main = function() {
     }
     // check if chat title has changed (and we have received essages)
     if (title == old_title && max_message_id >= min_message_id) {
-      query_messages(title, false);  // false means new messages
+      query_messages(false);  // false means new messages
     } else {
       set_status(1);  // yellow button top left will be made green by receive
       // update chat list to new title
       reset_chat();
-      fetch_messages(title);
+      fetch_messages();
     }
     setTimeout(function() {mainloop(title);}, 500);
   };
   
   // *********************************QUERY/FETCH******************************
   function fetch_messages(title) {
-    var chat_key = sha3_256.array(title);
-    var chat_id = sha3_256.array(chat_key);
+    var chat_id = get_chat_id();
     chat_id_hash = chat_id;
     ws_send([].concat(fch_pad, chat_id, end_pad));
   };
-  function query_messages(title, up) {
-    var chat_key = sha3_256.array(title);
-    var chat_id = sha3_256.array(chat_key);
+  function query_messages(up) {
+    var chat_id = get_chat_id();
     if (up) { // query messages upward (old messages)
       var query = [0x7f].concat(pack_number(min_message_id, 3));
     } else { // query messages downward (new messages)
@@ -282,40 +358,72 @@ main = function() {
 
   // *********************************SENDING**********************************
   function send_message() {
-    var outbound_bytes = message_to_bytes();
-    if (outbound_bytes == null) {return;}
-    document.getElementById("message_entry").value = "";
-    // counter_div.textContent = "0/" + message_content_lenght;
+    var chat_id = get_chat_id();
+    var cypher = create_cypher_block();
+    if (cypher == null) {return;}
+    // counter_div.textContent = "0/" + message_content_length;
+  
+    var signature = sign(cypher);
+    outbound_bytes = [].concat(snd_pad, chat_id, cypher, signature, end_pad);
+
     ws_send(outbound_bytes);
-    
+    document.getElementById("message_entry").value = "";
   };
   function pad_message(message) {
-    var message = aesjs.utils.utf8.toBytes(message);
-    var pad_lenght = message_content_lenght - message.length;
-    var padding = Array(pad_lenght).fill(pad_lenght);
+    if (message.length % 2 == 1) { // add space for message of odd length
+      message += ' ';
+    }
+    var message = utf8encoder.encode(message);
+    
+    var pad_lenght = message_content_length - message.length;
+    var pad_character = Math.floor(pad_lenght/2);
+    var padding = Array(pad_lenght).fill(pad_character);
     // concatinate the arrays
-    var padded_message = new Uint8Array(message_content_lenght);
+    var padded_message = new Uint8Array(message_content_length);
     padded_message.set(message);
     padded_message.set(padding, message.length);
     return padded_message;
   };
-  function message_to_bytes() {
-    // message: ["snd", chat_id, user_id, cypher, "end"]
-    var title = get_title();        // known by peers
-    var password = get_password();  // private
+  function sign(cypher) {
+    //var EdDSA = require('elliptic').eddsa;
+    var ec = new elliptic.eddsa('ed25519');
+    var secret = get_password();
+    var key_pair = ec.keyFromSecret(secret);
+    var cypher_hash = sha3_256.array(cypher);
+    var signature = key_pair.sign(cypher_hash).toBytes();
+    return signature;
+  };
+  function get_public_key() {
+    var ec = new elliptic.eddsa('ed25519');
+    var secret = get_password();
+    var key_pair = ec.keyFromSecret(secret);
+    return key_pair.pubBytes();
+  };
+  function get_time_array() {
+    const time = Date.now();
+    return pack_number(time, 8);
+  };
+  function get_chat_key() {
+    var title = get_title();
+    return sha3_256.array(title);
+  }
+  function get_chat_id() {
+    return sha3_256.array(get_chat_key());
+  };
+  function create_cypher_block() {
     var message = get_message();    // known by peers
     if (message == "") {return null;}
-
-    var chat_key = sha3_256.array(title);  // known by peers
-    var chat_id = sha3_256.array(chat_key);  // chat key is public
-    var user_id = sha3_256.array(password);  // user id is public
-
-    var text_bytes = pad_message(message);
+    // other stuff
+    var chat_key = get_chat_key();
+    var message_data = [].concat(
+      chat_key.slice(0,4),        // 4 bytes
+      get_time_array(),           // 8 bytes
+      get_public_key(),           // 32 bytes
+      ...pad_message(message)     // 396 bytes
+    );
     var cnt = new aesjs.Counter(1);
     var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, cnt);
-    var encrypted_bytes = Array.from(aes_cnt.encrypt(text_bytes));
-
-    return [].concat(snd_pad, chat_id, user_id, encrypted_bytes, end_pad);
+    return Array.from(aes_cnt.encrypt(message_data));
   };
 
   // *******************************CHAR_COUNTER*******************************
@@ -325,8 +433,8 @@ main = function() {
     if(event.keyCode === 13) {send_message();}
     // update colour and value of message length counter
     var textLength = message_entry.value.length;
-    //counter_div.textContent = textLength + "/" + (message_content_lenght-1);
-    if(textLength >= message_content_lenght-1){
+    //counter_div.textContent = textLength + "/" + (message_content_length-1);
+    if(textLength >= message_content_length-1){
       sending_div.style.borderColor = style.getPropertyValue("--status_err");
       send_button.style.background = style.getPropertyValue("--status_err");
       //counter_div.style.color = "#ff2851";
