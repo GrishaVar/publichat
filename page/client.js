@@ -1,14 +1,30 @@
 main = function() {
+  const landing_page_str = [`
+  PubliChat is a semi-private chatting application.
+  Chats are encrypted with their title as a key.
+  Every chat is accessible to anyone, provided they know the chat's title.
+  The title is never sent to the server, so the server can't decrypt the chats.
+  This way, the server does not need to be trusted.
+  Enter a chat title on the top to fetch messages start reading and
+  enter a username and message on the bottom to send something.
+  Some example usages of publi.chat is the following.`,
+  `Chat securely and privately by picking a secure title
+  (like a strong password)
+  Make a private note for yourself by picking a secure secret title
+  Discuss topics in 'public' chats with insecure titles
+  (eg. 'Baking', 'Fishing' or 'Chess')
+  Discuss webpages with no comments section (set the title to page's url)`,
+];
+  const message_byte_size = 512;
+  const message_content_length = 396;
+  const cypher_length = message_content_length + 4 + 8 + 32;
+  const fch_pad = [102,  99, 104];  // "fch"
+  const qry_pad = [113, 114, 121];  // "qry"
+  const snd_pad = [115, 110, 100];  // "snd"
+  const end_pad = [101, 110, 100];  // "end"
+  const rcv_pad = [109, 115, 103];  // "msg"
   var max_message_id = Number.MIN_SAFE_INTEGER;
   var min_message_id = Number.MAX_SAFE_INTEGER;
-  var message_byte_size = 512;
-  var message_content_length = 396;
-  var cypher_length = message_content_length + 4 + 8 + 32;
-  var fch_pad = [102,  99, 104];  // "fch"
-  var qry_pad = [113, 114, 121];  // "qry"
-  var snd_pad = [115, 110, 100];  // "snd"
-  var end_pad = [101, 110, 100];  // "end"
-  var rcv_pad = [109, 115, 103];  // "msg"
   var chat_id_hash = [];  // hash of current chat id
   var style = getComputedStyle(document.body);
   var send_button = document.getElementById("send_button");
@@ -84,6 +100,10 @@ main = function() {
     socket.onclose = function(e) {shutdown(e)};
     socket.onmessage = function(e) {ws_receive(e)};
     reset_chat();
+
+    if (get_title() === "") {
+      landing_page();
+    }
   };
   function ws_send(bytes) {
     if (socket.readyState != WebSocket.OPEN) {
@@ -107,6 +127,7 @@ main = function() {
     max_message_id = Number.MIN_SAFE_INTEGER;
     min_message_id = Number.MAX_SAFE_INTEGER;
   };
+
   // *********************************BUTTONS**********************************
   function toggle_loop() {
     if (socket.readyState != WebSocket.OPEN) {
@@ -117,6 +138,7 @@ main = function() {
       loop = !loop;
     }
   };
+
   // *********************************RECEVING*********************************
   function ws_receive(message_event) {
     var blob = message_event.data;
@@ -328,10 +350,16 @@ main = function() {
     main_div.appendChild(kick);
     return main_div;
   };
+
   // *********************************MAINLOOP*********************************
   function mainloop(old_title) {
     var title = get_title();
-    if (title == "" || loop == false) {
+    if (title == "") {
+      landing_page();
+      setTimeout(function() {mainloop(title);}, 1000);
+      return;
+    }
+    if (loop == false) {
       setTimeout(function() {mainloop(title);}, 1000);
       return;
     }
@@ -347,8 +375,16 @@ main = function() {
     setTimeout(function() {mainloop(title);}, 500);
   };
   
+  function landing_page() {
+    reset_chat();
+    for (let msg_str of landing_page_str) {
+      var [msg_div, time_div] = build_msg("991133Admin", "2022-03-01 13:37", msg_str);
+      time_div.appendChild(make_verify_mark(true));
+      message_list_div.appendChild(msg_div);
+    }
+  }
   // *********************************QUERY/FETCH******************************
-  function fetch_messages(title) {
+  function fetch_messages() {
     var chat_id = get_chat_id();
     chat_id_hash = chat_id;
     ws_send([].concat(fch_pad, chat_id, end_pad));
@@ -379,7 +415,7 @@ main = function() {
     outbound_bytes = [].concat(snd_pad, chat_id, cypher, signature, end_pad);
 
     ws_send(outbound_bytes);
-    document.getElementById("message_entry").value = "";
+    message_entry.value = "";
   };
   function pad_message(message, chat_key) {
     var message = utf8encoder.encode(message);  // make message into array
