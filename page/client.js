@@ -35,7 +35,7 @@ main = function() {
   
   function unpack_number(bytes) {
     var res = 0;
-    for (var i = 0; i<bytes.length; i++) {
+    for (var i = 0; i < bytes.length; i++) {
       res *= 256;  // same as res << 8 but also works for number > 32 bit
       res += bytes[i];
     }
@@ -44,7 +44,7 @@ main = function() {
   function pack_number(num, size) {
     var res = [];
     var num_copy = num;
-    for (var i = 0; i<size; i++) {
+    for (var i = 0; i < size; i++) {
       res.unshift(num & 0xff);
       num = Math.floor(num / 256); // same as >> 8 but works for ints > 32 bit
     }
@@ -204,6 +204,18 @@ main = function() {
       res = res && (expected[i] == chat_key_4bytes[i]);
     }
     return res;
+  };
+  function unpad_message(padded_message, chat_key) {
+    var padding_marker = chat_key[0];
+    for (var i = padded_message.length - 1; i >= 0; i--) {
+      if (padded_message[i] == padding_marker) { break; }
+    }
+    if (i <= 0) {
+      // message 0 length or no pad charachter => error
+      console.log("Warning: Message with invalid padding.")
+      return [];
+    }
+    return padded_message.slice(0, i);
   }
   function bytes_to_message(bytes) {
     // Break message server side
@@ -239,7 +251,7 @@ main = function() {
     }
     date_str += " " + date.toLocaleTimeString().slice(0,-3);
     // message string remove padding
-    var message_bytes = padded_bytes.slice(0, -2*padded_bytes.slice(-1));
+    var message_bytes = unpad_message(padded_bytes, chat_key_4bytes);
     var message_str = utf8decoder.decode(new Uint8Array(message_bytes));
     
     var [msg_div, sig_div] = build_msg(username_str, date_str, message_str);
@@ -369,15 +381,29 @@ main = function() {
     ws_send(outbound_bytes);
     document.getElementById("message_entry").value = "";
   };
-  function pad_message(message) {
-    if (message.length % 2 == 1) { // add space for message of odd length
-      message += ' ';
-    }
-    var message = utf8encoder.encode(message);
+  function pad_message(message, chat_key) {
+    var message = utf8encoder.encode(message);  // make message into array
+
+    var padding_marker = chat_key[0];
+    var padding_length  = message_content_length - message.length;
+    var padding = new Uint8Array(padding_length);
     
-    var pad_lenght = message_content_length - message.length;
-    var pad_character = Math.floor(pad_lenght/2);
-    var padding = Array(pad_lenght).fill(pad_character);
+    var possible_bytes = new Uint8Array(256 - 1);  // each byte 0-254 (no 255)
+    for (var i = 0; i < possible_bytes.length; i++) {possible_bytes[i] = i;}  // [0, 1, 2, ... 254]
+    possible_bytes[padding_marker] = 255; // exclude padding_marker
+
+    padding[0] = padding_marker;  // First byte should be the padding marker
+    for (var i = 1; i < padding_length; i++) {
+      var rand_byte = Math.floor(Math.random() * 256)  // evenly distributed on ints [0, 255]  (inclusive)
+      padding[i] = possible_bytes[rand_byte];  // on [0, 255] \ {marker}
+    }
+    
+    // GRISHA'S BETTER SOLUTION
+    // for (var i = 0; i < padding_length; i++) {
+    //   var rand_byte = Math.floor(Math.random() * 255)  // evenly distributed on ints [0, 254]
+    //   padding[i] = (rand_byte + (255-padding_marker)) % 256;  // on [0, 255] \ {marker}
+    // }
+
     // concatinate the arrays
     var padded_message = new Uint8Array(message_content_length);
     padded_message.set(message);
@@ -413,13 +439,12 @@ main = function() {
   function create_cypher_block() {
     var message = get_message();    // known by peers
     if (message == "") {return null;}
-    // other stuff
-    var chat_key = get_chat_key();
+    var chat_key = get_chat_key();  // known by peers
     var message_data = [].concat(
       chat_key.slice(0,4),        // 4 bytes
       get_time_array(),           // 8 bytes
       get_public_key(),           // 32 bytes
-      ...pad_message(message)     // 396 bytes
+      ...pad_message(message, chat_key)     // 396 bytes
     );
     var cnt = new aesjs.Counter(1);
     var aes_cnt = new aesjs.ModeOfOperation.ctr(chat_key, cnt);
