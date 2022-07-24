@@ -42,6 +42,7 @@ main = function() {
   var reader = new FileReader();
   var socket = null;
   var loop = false;
+  var recv_packets = 0;
   open_socket();
 
   // *******************************HELPERS************************************
@@ -85,6 +86,16 @@ main = function() {
     } else {
       socket_button.style.background = style.getPropertyValue("--status_err");
     }
+  };
+  function expect_response(identifer) {
+    var received_packets = recv_packets;
+    // within 2 seconds, recv_packets should have been incremented
+    setTimeout(()=>{
+      if (!loop && received_packets == recv_packets) {
+        set_status(1);
+        console.log("Response timed out: " + identifer);
+      }
+    }, 2000);
   };
 
   // *******************************OPEN_SOCKET********************************
@@ -141,11 +152,13 @@ main = function() {
 
   // *********************************RECEVING*********************************
   function ws_receive(message_event) {
+    recv_packets += 1;
+    set_status(0);
+
     var blob = message_event.data;
     reader.readAsArrayBuffer(blob);
   };
   reader.onload = function() {
-    set_status(1);  // yellow button top left
     var result = reader.result;
     var bytes_u8_array = new Uint8Array(result);
     var bytes = Array.from(bytes_u8_array);
@@ -367,7 +380,6 @@ main = function() {
     if (title == old_title && max_message_id >= min_message_id) {
       query_messages(false);  // false means new messages
     } else {
-      set_status(1);  // yellow button top left will be made green by receive
       // update chat list to new title
       reset_chat();
       fetch_messages();
@@ -388,6 +400,7 @@ main = function() {
     var chat_id = get_chat_id();
     chat_id_hash = chat_id;
     ws_send([].concat(fch_pad, chat_id, end_pad));
+    expect_response("fetch");
   };
   function query_messages(up) {
     var chat_id = get_chat_id();
@@ -397,6 +410,7 @@ main = function() {
       var query = [0xff].concat(pack_number(max_message_id, 3));
     }
     ws_send([].concat(qry_pad, chat_id, query, end_pad));
+    expect_response("query");
   };
   function top_scroll_query(e) {
     if (message_list_div.scrollTop == 0  && max_message_id > min_message_id) {
