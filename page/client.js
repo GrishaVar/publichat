@@ -459,12 +459,12 @@ main = function() {
     // update colour and value of message length counter
     var textLength = message_entry.value.length;
     //counter_div.textContent = textLength + "/" + (message_content_length-1);
-    if(textLength >= message_content_length-1){
-      sending_div.style.borderColor = style.getPropertyValue("--status_err");
+    if(textLength >= message_content_length - 10){
+      //sending_div.style.borderColor = style.getPropertyValue("--status_err");
       send_button.style.background = style.getPropertyValue("--status_err");
       //counter_div.style.color = "#ff2851";
     } else {
-      sending_div.style.borderColor = style.getPropertyValue("--borders1");
+      //sending_div.style.borderColor = style.getPropertyValue("--borders1");
       send_button.style.background = style.getPropertyValue("--borders1");
       //counter_div.style.color = "#757575";
     }
