@@ -334,6 +334,7 @@ main = function() {
     // Verifies the time, sign., and chat id
     // also adds checkmark to each message
     let chat_verified, time_verified, sig_verified;
+    let reason = `Message verified!`
     var verified = (
       (chat_verified = verify_chat_key(chat_key_4bytes))
       && (time_verified = verify_time(server_time, client_time))
@@ -347,10 +348,25 @@ main = function() {
         "\nTime check: ", time_verified,
         "\nSignature check: ", sig_verified,
       );
+      if (!chat_verified) {
+        reason = "Message sent to wrong chat.\n" +
+          "Possible attack, take caution!\n" +
+          "An impersonator may have copied this valid message from a different chat.\n" +
+          "May have happened if you switched chats too quickly."
+      } else if (!time_verified) {
+        reason = "Message sent at strange time.\n" +
+          "Possible attack, take caution!\n" +
+          "An impersonator may have resent an old message from this chat.\n" +
+          "May have happened due to poor connection or strange time settings."
+      } else if (!sig_verified) {
+        reason = "Message signed incorrectly.\n" +
+          "Possible attack, take caution!\n" +
+          "An impersonator may be failing to impersonate."
+      }
     }
-    time_div.appendChild(make_verify_mark(verified));
+    time_div.appendChild(make_verify_mark(verified, reason));
   };
-  function make_verify_mark(is_verified) {
+  function make_verify_mark(is_verified, reason) {
     var main_div = document.createElement("div");
     var circle = document.createElement("div");
     var stem = document.createElement("div");
@@ -368,6 +384,8 @@ main = function() {
     main_div.appendChild(circle);
     main_div.appendChild(stem);
     main_div.appendChild(kick);
+
+    main_div.title = reason;
     return main_div;
   };
 
