@@ -7,13 +7,13 @@ main = function() {
   This way, the server does not need to be trusted.
   Enter a chat title on the top to fetch messages start reading and
   enter a username and message on the bottom to send something.
-  Some example usages of publi.chat is the following.
-  `,`Chat securely and privately by picking a secure title 
-  (like a strong password) &#13;&#10; 
-  Make a private note for yourself by picking a secure secret title &#13;&#10;
+  Some example usages of publi.chat is the following.`,
+  `Chat securely and privately by picking a secure title
+  (like a strong password)
+  Make a private note for yourself by picking a secure secret title
   Discuss topics in 'public' chats with insecure titles
-  (eg. 'Baking', 'Fishing' or 'Chess') &#13;&#10;
-  Discuss webpages with no comments section (set the title to page's url)`
+  (eg. 'Baking', 'Fishing' or 'Chess')
+  Discuss webpages with no comments section (set the title to page's url)`,
 ];
   const message_byte_size = 512;
   const message_content_lenght = 396;
@@ -348,7 +348,7 @@ main = function() {
     reset_chat();
     for (let msg_str of landing_page_str) {
       message_list_div.appendChild(
-        build_message("ff1133ADMIN", "2022/03/01 13:37", msg_str, true)
+        build_message("991133Admin", "2022-03-01 13:37", msg_str, true)
       );
     }
   }
@@ -384,7 +384,7 @@ main = function() {
     outbound_bytes = [].concat(snd_pad, chat_id, cypher, signature, end_pad);
 
     ws_send(outbound_bytes);
-    document.getElementById("message_entry").value = "";
+    message_entry.value = "";
   };
   function pad_message(message) {
     if (message.length % 2 == 1) { // add space for message of odd length
