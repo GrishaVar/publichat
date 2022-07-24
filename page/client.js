@@ -43,6 +43,7 @@ main = function() {
   var socket = null;
   var loop = false;
   var recv_packets = 0;
+  var caught_timeout = false;
   open_socket();
 
   // *******************************HELPERS************************************
@@ -91,8 +92,14 @@ main = function() {
     var received_packets = recv_packets;
     // within 2 seconds, recv_packets should have been incremented
     setTimeout(()=>{
-      if (!loop && received_packets == recv_packets) {
+      if (
+        received_packets == recv_packets  // nothing new has come
+        && !caught_timeout  // not already in timeout state
+        && loop  // not in paused state
+        && socket.readyState == WebSocket.OPEN  // not in shutdown state
+      ) {
         set_status(1);
+        caught_timeout = true;
         console.log("Response timed out: " + identifer);
       }
     }, 2000);
@@ -128,10 +135,10 @@ main = function() {
   // *********************************SHUTDOWN/RESET***************************
   function shutdown(e) {
     loop = false;
+    set_status(2);  // red button top left
+    send_button.style.backgroundColor = style.getPropertyValue("--status_err");
     if (typeof e != "string") {console.log("ws error! "+e.code+e.reason);}
     else {console.log(e);}
-    send_button.style.backgroundColor = style.getPropertyValue("--status_err");
-    set_status(2);  // red button top left
   };
   function reset_chat(){
     message_list_div.replaceChildren();
@@ -152,8 +159,9 @@ main = function() {
 
   // *********************************RECEVING*********************************
   function ws_receive(message_event) {
-    recv_packets += 1;
     set_status(0);
+    recv_packets += 1;
+    caught_timeout = false;
 
     var blob = message_event.data;
     reader.readAsArrayBuffer(blob);
@@ -173,10 +181,10 @@ main = function() {
     if (msg_padding[0] != rcv_pad[0]) {shutdown("incorrect smrt pad 1");}
     if (msg_padding[1] != rcv_pad[1]) {shutdown("incorrect smrt pad 2");}
     if (msg_padding[2] != rcv_pad[2]) {shutdown("incorrect smrt pad 3");}
-    if (chat_id_byte != chat_id_hash[0]) {set_status(0); return;}
-    if (message_count*message_byte_size != bytes.length) {set_status(0);return}
+    if (chat_id_byte != chat_id_hash[0]) {return;}
+    if (message_count*message_byte_size != bytes.length) {return}
     
-    if (message_count === 0) {set_status(0); return;}
+    if (message_count === 0) {return;}
 
     if (build_upwards) {
       max_message_id = Math.max(max_message_id, message_id + message_count-1);
@@ -187,7 +195,6 @@ main = function() {
     }
     
     read_message_bytes(bytes, build_upwards);
-    set_status(0);  // green button top left
   };
 
   function read_message_bytes(bytes, build_upwards) {
