@@ -1,5 +1,20 @@
 main = function() {
-  const landing_page_str = ['Test 1', 'test 2'];
+  const landing_page_str = [`
+  PubliChat is a semi-private chatting application.
+  Chats are encrypted with their title as a key.
+  Every chat is accessible to anyone, provided they know the chat's title.
+  The title is never sent to the server, so the server can't decrypt the chats.
+  This way, the server does not need to be trusted.
+  Enter a chat title on the top to fetch messages start reading and
+  enter a username and message on the bottom to send something.
+  Some example usages of publi.chat is the following.
+  `,`Chat securely and privately by picking a secure title 
+  (like a strong password) &#13;&#10; 
+  Make a private note for yourself by picking a secure secret title &#13;&#10;
+  Discuss topics in 'public' chats with insecure titles
+  (eg. 'Baking', 'Fishing' or 'Chess') &#13;&#10;
+  Discuss webpages with no comments section (set the title to page's url)`
+];
   const message_byte_size = 512;
   const message_content_lenght = 396;
   const cypher_length = message_content_lenght + 4 + 8 + 32;
