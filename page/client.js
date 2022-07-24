@@ -333,22 +333,22 @@ main = function() {
   ) {
     // Verifies the time, sign., and chat id
     // also adds checkmark to each message
-    var sig_verified = verify_signature(public_key, bytes_hash, signature);
-    var time_verified = verify_time(server_time, client_time);
-    var chat_verified =  verify_chat_key(chat_key_4bytes);
-    var is_verified = false;
-    if (sig_verified && time_verified && chat_verified) {
-      is_verified = true;
-    } else {
+    let chat_verified, time_verified, sig_verified;
+    var verified = (
+      (chat_verified = verify_chat_key(chat_key_4bytes))
+      && (time_verified = verify_time(server_time, client_time))
+      && (sig_verified = verify_signature(public_key, bytes_hash, signature))
+    );
+    if (!verified) {
       console.log(
         "Message from: ", aesjs.utils.hex.fromBytes(public_key).slice(0, 20),
         "\nCould not be verified because:",
-        "\nSignature check: ", sig_verified,
-        "\nTime check: ", time_verified,
         "\nChat check: ", chat_verified,
+        "\nTime check: ", time_verified,
+        "\nSignature check: ", sig_verified,
       );
     }
-    time_div.appendChild(make_verify_mark(is_verified));
+    time_div.appendChild(make_verify_mark(verified));
   };
   function make_verify_mark(is_verified) {
     var main_div = document.createElement("div");
