@@ -277,9 +277,9 @@ main = function() {
     var bg_colour = "#" + username_str.slice(0,6);
     usr_div.style.background = bg_colour;
     usr_div.style.color = white_or_black(bg_colour);  // selects best contrast
-    usr_div.innerHTML = username_str.slice(6);
-    time_div.innerHTML = date_str;
-    content_div.innerHTML = message_str;
+    usr_div.textContent = username_str.slice(6);
+    time_div.textContent = date_str;
+    content_div.textContent = message_str;
     msg_div.appendChild(usr_div);
     msg_div.appendChild(time_div);
     msg_div.appendChild(content_div);
