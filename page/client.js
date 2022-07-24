@@ -44,6 +44,17 @@ main = function() {
   var loop = false;
   var recv_packets = 0;
   var caught_timeout = false;
+
+  var cur_status;
+  const status_data = {
+    undefined: ["", [0], ""],
+    0: ["--status_wait", [0, 1, 4], "Connecting to server"],
+    1: ["--status_ok", [2, 3, 4], "Everything's working fine"],
+    2: ["--status_wait", [1, 4], "Fetching paused. Click me to re-enable"],
+    3: ["--status_wait", [1, 4], "Not receiving updates from server, check internet connection"],
+    4: ["--status_error", [0], "Connection severed. Click me to reconnect"],
+  }
+
   open_socket();
 
   // *******************************HELPERS************************************
@@ -79,14 +90,14 @@ main = function() {
   }
 
   // *******************************SET_STATUS*********************************
-  function set_status(value) {
-    if (value == 0) { // good = 0; wait = 1; error = 2;
-      socket_button.style.background = style.getPropertyValue("--status_ok");
-    } else if (value == 1) {
-      socket_button.style.background = style.getPropertyValue("--status_wait");
-    } else {
-      socket_button.style.background = style.getPropertyValue("--status_err");
-    }
+  function set_status(status) {
+    let [, succ, ] = status_data[cur_status];
+    if (!status in succ) { return; }  // skip illegal transitions
+
+    cur_status = status;
+    let [colour, , title] = status_data[status];
+    socket_button.style.background = style.getPropertyValue(colour);
+    socket_button.title = title;
   };
   function expect_response(identifer) {
     var received_packets = recv_packets;
@@ -98,7 +109,7 @@ main = function() {
         && loop  // not in paused state
         && socket.readyState == WebSocket.OPEN  // not in shutdown state
       ) {
-        set_status(1);
+        set_status(3);
         caught_timeout = true;
         console.log("Response timed out: " + identifer);
       }
@@ -107,12 +118,12 @@ main = function() {
 
   // *******************************OPEN_SOCKET********************************
   function open_socket() {
-    set_status(1);
+    set_status(0);
     socket = new WebSocket("ws://" + location.host + "/ws");
     socket.onopen = function() {
       console.log("socket opened"); 
       setTimeout(function() {loop = true;}, 1000);
-      set_status(0);
+      set_status(1);
     };
     socket.onerror = function(e) {shutdown(e)};
     socket.onclose = function(e) {shutdown(e)};
@@ -135,7 +146,7 @@ main = function() {
   // *********************************SHUTDOWN/RESET***************************
   function shutdown(e) {
     loop = false;
-    set_status(2);  // red button top left
+    set_status(4);  // red button top left
     send_button.style.backgroundColor = style.getPropertyValue("--status_err");
     if (typeof e != "string") {console.log("ws error! "+e.code+e.reason);}
     else {console.log(e);}
@@ -152,14 +163,14 @@ main = function() {
       loop = false;
       open_socket();
     } else {
-      set_status(Number(loop));
       loop = !loop;
+      set_status({true: 1, false: 2}[loop]);
     }
   };
 
   // *********************************RECEVING*********************************
   function ws_receive(message_event) {
-    set_status(0);
+    set_status(1);
     recv_packets += 1;
     caught_timeout = false;
 
