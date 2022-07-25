@@ -53,7 +53,7 @@ main = function() {
     2: ["--status_wait", [1, 4], "Fetching paused. Click me to re-enable"],
     3: ["--status_wait", [1, 4], "Not receiving updates from server, check internet connection"],
     4: ["--status_error", [0], "Connection severed. Click me to reconnect"],
-  }
+  };
 
   open_socket();
 
@@ -78,7 +78,7 @@ main = function() {
       num = Math.floor(num / 256); // same as >> 8 but works for ints > 32 bit
     }
     if (num > 0) {
-      console.log("warning: num too big for array", num_copy, size)
+      console.log("warning: num too big for array", num_copy, size);
     }
     return res;
   };
@@ -121,7 +121,7 @@ main = function() {
     set_status(0);
     socket = new WebSocket("ws://" + location.host + "/ws");
     socket.onopen = function() {
-      console.log("socket opened"); 
+      console.log("socket opened");
       setTimeout(function() {loop = true;}, 1000);
       set_status(1);
     };
@@ -142,7 +142,7 @@ main = function() {
     var outgoing = new Uint8Array(bytes);
     socket.send(outgoing);
   };
-  
+
   // *********************************SHUTDOWN/RESET***************************
   function shutdown(e) {
     loop = false;
@@ -209,7 +209,7 @@ main = function() {
   };
 
   function read_message_bytes(bytes, build_upwards) {
-    if (bytes == null || bytes == []) {console.log("recevied empty");return;}
+    if (bytes == null || bytes == []) {console.log("Received empty");return;}
     // Checks current scroll height BEFORE the message is added
     var scroll_pos = message_list_div.scrollTop+message_list_div.clientHeight;
     var scroll_down = scroll_pos > (message_list_div.scrollHeight * 0.90);
@@ -298,25 +298,27 @@ main = function() {
     if (date.toDateString() === today.toDateString()) {  // sent today
       var date_str = "";
     } else if (date.getFullYear() === today.getFullYear()) {  // sent this year
-      var date_str = date.toLocaleString().slice(0,-15);
+      var date_str = date.toLocaleString().slice(0, -15);
     } else {
-      var date_str = date.toLocaleString().slice(0,-10);  // date < this year
+      var date_str = date.toLocaleString().slice(0, -10);  // date < this year
     }
-    date_str += " " + date.toLocaleTimeString().slice(0,-3);
+    date_str += " " + date.toLocaleTimeString().slice(0, -3);
     // message string remove padding
     var message_bytes = unpad_message(padded_bytes, chat_key_4bytes);
     var message_str = utf8decoder.decode(new Uint8Array(message_bytes));
     
     var [msg_div, sig_div] = build_msg(username_str, date_str, message_str);
+      message_str
+    );
     setTimeout(
       ()=>verify_message(
         sig_div, public_key, bytes_hash, signature, 
         server_time, client_time, chat_key_4bytes
       ), 0
-    );  // this is to make the singature checking async to the building of msg
+    );  // this is to make the signature checking async to the building of msg
     return msg_div; 
   };
-  function build_msg(username_str, date_str, message_str) {
+  function build_msg(username_str, user_colour, date_str, message_str) {
     var msg_div = document.createElement("div");
     var usr_div = document.createElement("div");
     var time_div = document.createElement("div");
@@ -327,10 +329,10 @@ main = function() {
     time_div.className = "time";
     content_div.className = "content";
 
-    var bg_colour = "#" + username_str.slice(0,6);
+    var bg_colour = "#" + user_colour;
     usr_div.style.background = bg_colour;
     usr_div.style.color = white_or_black(bg_colour);  // selects best contrast
-    usr_div.textContent = username_str.slice(6);
+    usr_div.textContent = username_str.substring(0, 15).replaceAll('=', '');
     time_div.textContent = date_str;
     content_div.textContent = message_str;
     msg_div.appendChild(usr_div);
@@ -343,14 +345,12 @@ main = function() {
     server_time, client_time, chat_key_4bytes
   ) {
     // Verifies the time, sign., and chat id
-    // also adds checkmark to each message
-    let chat_verified, time_verified, sig_verified;
-    let reason = `Message verified!`
-    var verified = (
-      (chat_verified = verify_chat_key(chat_key_4bytes))
-      && (time_verified = verify_time(server_time, client_time))
-      && (sig_verified = verify_signature(public_key, bytes_hash, signature))
-    );
+    // also adds check mark to each message
+    let reason = "Message verified!";
+    let chat_verified = verify_chat_key(chat_key_4bytes);
+    let time_verified = verify_time(server_time, client_time);
+    let sig_verified = verify_signature(public_key, bytes_hash, signature);
+    var verified = chat_verified && time_verified && sig_verified;
     if (!verified) {
       console.log(
         "Message from: ", aesjs.utils.hex.fromBytes(public_key).slice(0, 20),
@@ -359,20 +359,20 @@ main = function() {
         "\nTime check: ", time_verified,
         "\nSignature check: ", sig_verified,
       );
+      reason = "Possible attack, take caution!"
       if (!chat_verified) {
-        reason = "Message sent to wrong chat.\n" +
-          "Possible attack, take caution!\n" +
-          "An impersonator may have copied this valid message from a different chat.\n" +
-          "May have happened if you switched chats too quickly."
-      } else if (!time_verified) {
-        reason = "Message sent at strange time.\n" +
-          "Possible attack, take caution!\n" +
+        reason += "\n- Message sent to wrong chat.\n" +
+          "An impersonator may have copied this va  lid message from a different chat.\n" +
+          "May have happened if you switched chats too quickly.";
+      }
+      if (!time_verified) {
+        reason += "\n- Message sent at strange time.\n" +
           "An impersonator may have resent an old message from this chat.\n" +
-          "May have happened due to poor connection or strange time settings."
-      } else if (!sig_verified) {
-        reason = "Message signed incorrectly.\n" +
-          "Possible attack, take caution!\n" +
-          "An impersonator may be failing to impersonate."
+          "May have happened due to poor connection or strange time settings.";
+      }
+      if (!sig_verified) {
+        reason += "\n- Message signed incorrectly.\n" +
+          "This message may have been alterd and cannot be trusted.";
       }
     }
     time_div.appendChild(make_verify_mark(verified, reason));
@@ -422,7 +422,7 @@ main = function() {
     }
     setTimeout(function() {mainloop(title);}, 500);
   };
-  
+
   function landing_page() {
     reset_chat();
     for (let msg_str of landing_page_str) {
@@ -460,7 +460,7 @@ main = function() {
     var cypher = create_cypher_block();
     if (cypher == null) {return;}
     // counter_div.textContent = "0/" + message_content_length;
-  
+
     var signature = sign(cypher);
     outbound_bytes = [].concat(snd_pad, chat_id, cypher, signature, end_pad);
 
