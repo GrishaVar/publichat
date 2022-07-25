@@ -288,10 +288,8 @@ main = function() {
     var public_key = decrypted_bytes.splice(0, 32); // 32 bytes
     var padded_bytes = decrypted_bytes.splice(0, message_content_length);// 396
     // username string
-    var username_str = aesjs.utils.hex.fromBytes(public_key).slice(0, 20);
-    if (username_str == "e0b1fe74117e1b95b608") { // pub key of empty string
-      username_str = "79985aAnonymous"; // 507550 is hex for green
-    }
+    var username_colour = aesjs.utils.hex.fromBytes(public_key).slice(26, 32);
+    var username_str = btoa(String.fromCharCode(...public_key));
     // date string
     var date = new Date(Number(server_time));
     var today = new Date();
@@ -307,7 +305,10 @@ main = function() {
     var message_bytes = unpad_message(padded_bytes, chat_key_4bytes);
     var message_str = utf8decoder.decode(new Uint8Array(message_bytes));
     
-    var [msg_div, sig_div] = build_msg(username_str, date_str, message_str);
+    var [msg_div, sig_div] = build_msg(
+      username_str, 
+      username_colour,
+      date_str, 
       message_str
     );
     setTimeout(
@@ -426,7 +427,13 @@ main = function() {
   function landing_page() {
     reset_chat();
     for (let msg_str of landing_page_str) {
-      var [msg_div, time_div] = build_msg("991133Admin", "2022-03-01 13:37", msg_str);
+      var [msg_div, time_div] = build_msg(
+        "Admin", 
+        "991133",
+        "2022-03-01 13:37", 
+        msg_str
+      );
+      
       time_div.appendChild(make_verify_mark(true));
       message_list_div.appendChild(msg_div);
     }
