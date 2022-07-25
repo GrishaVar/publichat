@@ -61,7 +61,7 @@ impl Message {
                 true  => ("\x1B[32m✔\x1B[0m", ""),
                 false => ("\x1B[31m✗", "\x1B[0m"),
             };
-            let user = &base64::encode(signature)[..10];
+            let user = &base64::encode(pub_key)[..15];
             let time = Duration::from_millis(server_time).as_secs();
             // let msg = String::from_utf8_lossy(&cypher[..pad_length as usize]);
             let msg = std::str::from_utf8(message).unwrap();
