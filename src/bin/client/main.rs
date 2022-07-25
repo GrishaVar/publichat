@@ -61,7 +61,6 @@ fn listener(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
             // handle initial fetch separately; skip all checks
             for msg in buf.chunks_exact(MSG_OUT_SIZE) {
                 let msg = Message::new(msg.try_into().unwrap(), &s.chat_key)?;
-                // println!("{}", msg);
                 s.queue.push_back(msg);
             }
             s.min_id = first_id;
@@ -108,13 +107,15 @@ fn requester(
     let chat_id = state.lock().map_err(|_| "Failed to lock state")?.chat_id;
     let chat_key = state.lock().map_err(|_| "Failed to lock state")?.chat_key;
     let mut cypher_buf = [0; CYPHER_SIZE];
+    let mut signature_buf = [0; SIGNATURE_SIZE];
 
     // Fetch until we get first message packet
     while state.lock().map_err(|_| "Failed to lock state")?.queue.is_empty() {
         comm::send_fetch(&mut stream, &chat_id)?;
         if let Ok(msg) = snd_rx.try_recv() {
             cypher_buf = Message::make_cypher(&msg, &chat_key).unwrap();  // TODO: unwrap
-            comm::send_msg(&mut stream, &chat_id, &user_id, &cypher_buf)?;
+            signature_buf = [0; SIGNATURE_SIZE];
+            comm::send_msg(&mut stream, &chat_id, &cypher_buf, &signature_buf)?;
         }
         thread::sleep(FQ_DELAY);
     }
@@ -130,7 +131,8 @@ fn requester(
         )?;
         if let Ok(msg) = snd_rx.try_recv() {
             cypher_buf = Message::make_cypher(&msg, &chat_key).unwrap();  // TODO: unwrap
-            comm::send_msg(&mut stream, &chat_id, &user_id, &cypher_buf)?;
+            signature_buf = [0; SIGNATURE_SIZE];
+            comm::send_msg(&mut stream, &chat_id, &cypher_buf, &signature_buf)?;
         }
         thread::sleep(FQ_DELAY);
     }

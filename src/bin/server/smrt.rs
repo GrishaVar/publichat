@@ -27,11 +27,11 @@ pub fn packet_to_storage(src: &MessageIn, dest: &mut MessageSt) -> Hash {
         .duration_since(std::time::SystemTime::UNIX_EPOCH).unwrap()
         .as_millis().try_into().expect("go play with your hoverboard");
     dest[..TIME_SIZE].clone_from_slice(&msg_time.to_be_bytes());
-    dest[MSG_ST_RSA_START..].clone_from_slice(&src[MSG_IN_RSA..]);
+    dest[MSG_ST_CYPHER_START..].clone_from_slice(&src[MSG_IN_CYPHER..]);
 
     // return the chat ID
-    let mut chat_id = [0; HASH_SIZE];
-    chat_id.clone_from_slice(&src[MSG_IN_CHAT_ID..][..HASH_SIZE]);
+    let mut chat_id = [0; CHAT_ID_SIZE];
+    chat_id.clone_from_slice(&src[MSG_IN_CHAT_ID..][..CHAT_ID_SIZE]);
     chat_id
 }
 

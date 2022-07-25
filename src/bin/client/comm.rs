@@ -6,16 +6,16 @@ use publichat::constants::*;
 pub fn send_msg(  // TODO: create global "smrt" crate with en/decoding functions
     stream: &mut TcpStream,
     chat: &Hash,
-    user: &Hash,
-    cypher: &Contents,
+    cypher: &Cypher,
+    signature: &Signature,
 ) -> Res {
     // TODO: rename constants to something direction-agnostic
     let mut buf = [0; PADDING_SIZE + MSG_IN_SIZE + PADDING_SIZE];
 
     buf[..PADDING_SIZE].copy_from_slice(&SEND_PADDING);  // TODO: make padding const?
     buf[PADDING_SIZE+MSG_IN_CHAT_ID..][..CHAT_ID_SIZE].copy_from_slice(chat);
-    buf[PADDING_SIZE+MSG_IN_RSA..][..HASH_SIZE].copy_from_slice(user);
     buf[PADDING_SIZE+MSG_IN_CYPHER..][..CYPHER_SIZE].copy_from_slice(cypher);
+    buf[PADDING_SIZE+MSG_IN_SIGNATURE..][..SIGNATURE_SIZE].copy_from_slice(signature);
     buf[PADDING_SIZE+MSG_IN_SIZE..][..PADDING_SIZE].copy_from_slice(&END_PADDING);
 
     full_write(stream, &buf, "Failed to send message")

@@ -8,6 +8,7 @@
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha3/0.8.0/sha3.min.js" integrity="sha512-PmGDkK2UHGzTUfkFGcJ8YSrD/swUXekcca+1wWlrwALIZho9JX+3ddaaI9wmmf8PmgDIpMtx6TU8YBJAZS0mPQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/aes-js/4.0.0-beta.2/index.min.js" integrity="sha512-H9KqUQpRsqGUaA2pm2FkHZX4wFhgDwE70o2PUS0Cx7V1PJjBh2J5YZnSaI/u0m9zv/Cx3qvMI48/OZz7/o47xQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/elliptic/6.5.4/elliptic.min.js" integrity="sha512-78ON1nQI4R5btOF/cPVb/msINn8P3K6yJ7n29r4J0M4SBLhTDmFqZgNQ7htZM16539xPvQDywpTdJaQPxuXxGw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script type="text/javascript" src="client.js"></script>
     <script type="text/javascript">
       window.onload = main;
@@ -117,6 +118,40 @@
         font-family: verdana;
         overflow-wrap: break-word;
       }
+      .checkmark {
+        display: inline-block;
+        margin-left: 3px;
+        width: 12px;
+        height: 12px;
+        -ms-transform: rotate(45deg); /* IE 9 */
+        -webkit-transform: rotate(45deg); /* Chrome, Safari, Opera */
+        transform: rotate(45deg);
+      }
+      .checkmark_circle {
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        background-color: var(--status_wait);
+        border-radius: 6px;
+        left: 0;
+        top: 0;
+      }
+      .checkmark_stem {
+        position: absolute;
+        width: 2px;
+        height: 6px;
+        background-color: #fff;
+        left: 6px;
+        top: 2px;
+      }
+      .checkmark_kick {
+        position: absolute;
+        width: 4px;
+        height: 2px;
+        background-color: #fff;
+        left: 3px;
+        top: 6px;
+      }
 
       /* ********** BOTTOM ********** */
       .bottom {
@@ -225,7 +260,7 @@
     <div class="bottom">
       <input type="text" class="secret_identifer" id="password" placeholder="Secret Username" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
       <div class="sending_div" id="sending_div">
-        <input type="text" class="message_entry" id="message_entry" placeholder="Write message here..." maxlength="127">
+        <input type="text" class="message_entry" id="message_entry" placeholder="Write message here..." maxlength="395">
         <div class="send_button_div">
           <div class="send_button" id="send_button">
             <div id="triangle_top"></div>
