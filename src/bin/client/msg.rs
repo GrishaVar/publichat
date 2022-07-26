@@ -1,6 +1,6 @@
 use std::{fmt, time::Duration};
 
-use rand;
+use rand::Rng;
 use ed25519_dalek::{Signature, Verifier, PublicKey};
 
 use publichat::constants::*;  // TODO: Signature defined twice
@@ -111,13 +111,12 @@ impl Message {
         res[4+8+HASH_SIZE..][..text.len()].copy_from_slice(text.as_bytes());
 
         // padding
+        let mut rng = rand::thread_rng();
         let pad_start_pos = 4+8+HASH_SIZE+text.len();
         res[pad_start_pos] = chat_key[0];  // pad indicator
-        res[pad_start_pos+1..].fill_with(|| {
-            let mut res = rand::random::<u8>();
-            while res == chat_key[0] { res = rand::random(); }
-            res  // TODO: potentially non-terminating! ^
-        });
+        res[pad_start_pos+1..].fill_with(||
+            rng.gen_range(1u8..=0xff).wrapping_add(chat_key[0])
+        );
 
         // AES
         apply_aes(chat_key, &mut res);
