@@ -1,10 +1,11 @@
 use std::{fmt, time::Duration};
 
 use rand;
+use ed25519_dalek::{Signature, Verifier, PublicKey};
 
-use publichat::constants::*;
+use publichat::constants::*;  // TODO: Signature defined twice
 
-use crate::crypt::apply_aes;
+use crate::crypt::{apply_aes, hash};
 
 #[derive(Debug)]
 pub struct Message {
@@ -25,7 +26,12 @@ impl Message {
     ) -> Result<Self, &'static str> {
         let server_time = u64::from_be_bytes(bytes[MSG_OUT_TIME..][..TIME_SIZE].try_into().unwrap());
         let mut cypher: Cypher = bytes[MSG_OUT_CYPHER..][..CYPHER_SIZE].try_into().unwrap();
-        let signature: Signature = bytes[MSG_OUT_SIG..][..SIGNATURE_SIZE].try_into().unwrap();
+        let signature = &bytes[MSG_OUT_SIG..][..SIGNATURE_SIZE];
+
+        // prepare signature
+        let bytes_hash = hash(&cypher.as_slice());
+        let signature = Signature::from_bytes(signature)
+            .map_err(|_| "Failed to make signature")?;
 
         // decrypt chat in-place
         apply_aes(chat_key, &mut cypher);
@@ -34,8 +40,12 @@ impl Message {
         // TODO: magic numbers
         let received_chat_key = &message_data[..4];
         let client_time = u64::from_be_bytes(message_data[4..][..8].try_into().unwrap());
-        let pub_key = &message_data[4+8..][..32];  
+        let pub_key_bytes = &message_data[4+8..][..32];
         let padded_msg = &message_data[4+8+32..];
+
+        // prepare public key for signature verificaiton
+        let pub_key = PublicKey::from_bytes(pub_key_bytes)
+            .map_err(|_| "Failed to make pub key")?;
 
         // find padding end
         let pad_start = padded_msg.iter()
@@ -46,9 +56,9 @@ impl Message {
 
         // assign varified randomly
         let verified =
-            server_time.abs_diff(client_time) < 10 * 1000  // no more than 10 sec  // TODO: magic numbers
-            && received_chat_key == &chat_key[..4];
-            // TODO: && signature valid
+            received_chat_key == &chat_key[..4]
+            && server_time.abs_diff(client_time) < 10 * 1000  // no more than 10 sec  // TODO: magic numbers
+            && pub_key.verify(&bytes_hash, &signature).is_ok();
 
         // assert utf8
         if std::str::from_utf8(message).is_err() {
@@ -61,7 +71,7 @@ impl Message {
                 true  => ("\x1B[32m✔\x1B[0m", ""),
                 false => ("\x1B[31m✗", "\x1B[0m"),
             };
-            let user = &base64::encode(pub_key)[..15];
+            let user = &base64::encode(pub_key_bytes)[..15];
             let time = Duration::from_millis(server_time).as_secs();
             // let msg = String::from_utf8_lossy(&cypher[..pad_length as usize]);
             let msg = std::str::from_utf8(message).unwrap();
