@@ -91,7 +91,7 @@ impl Message {
     pub fn make_cypher(
         text: &str,
         chat_key: &Hash,
-        // pub_key: &Hash
+        pub_key: &Hash
     ) -> Result<Cypher, ()> {
         let mut res = [0; CYPHER_SIZE];
         if text.len() > 396 - 1 { return Err(()) }  // msg too long
@@ -105,7 +105,7 @@ impl Message {
         // copy in basic data
         res[..4].copy_from_slice(&chat_key[..4]);
         res[4..][..8].copy_from_slice(&time[8..]);
-        res[4+8..][..HASH_SIZE].copy_from_slice(&[0; HASH_SIZE]);  // TODO: add public key
+        res[4+8..][..HASH_SIZE].copy_from_slice(pub_key);
 
         // copy in message
         res[4+8+HASH_SIZE..][..text.len()].copy_from_slice(text.as_bytes());

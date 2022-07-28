@@ -1,3 +1,4 @@
+use ed25519_dalek::{Keypair, SecretKey, PublicKey, Signer, SIGNATURE_LENGTH};
 use sha3::{Sha3_256, Digest};
 use aes::{Aes256, cipher::{KeyIvInit, StreamCipher}};
 use ctr::Ctr128BE;
@@ -40,4 +41,27 @@ const IV: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
 pub fn apply_aes(key: &Hash, buf: &mut Cypher) {
     let mut cypher = AesCtr::new(key.into(), &IV.into());
     cypher.apply_keystream(buf);
+}
+
+pub fn make_keypair(input: &[u8]) -> Result<Keypair, &'static str> {
+    // hash input data to get a neat 32 bytes
+    let hash = hash(input);
+
+    // make privates & publics
+    let private = SecretKey::from_bytes(&hash)
+        .map_err(|_| "Failed to make private key")?;
+    let public = PublicKey::from(&private);
+
+    // copy into a pair (why isn't there just a Keypair::from::<SecretKey>??)
+    let mut all_bytes = [0; ed25519_dalek::KEYPAIR_LENGTH];
+    all_bytes[..ed25519_dalek::SECRET_KEY_LENGTH].copy_from_slice(&private.to_bytes());
+    all_bytes[ed25519_dalek::SECRET_KEY_LENGTH..].copy_from_slice(&public.to_bytes());
+
+    Keypair::from_bytes(&all_bytes).map_err(|_| "Failed to make keypair")
+}
+
+pub fn sign(cypher: &Cypher, keypair: &Keypair) -> [u8; SIGNATURE_LENGTH] {
+    let hash = hash(cypher);
+    let sig = keypair.sign(&hash);
+    sig.to_bytes()
 }

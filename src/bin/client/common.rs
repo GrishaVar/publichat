@@ -11,7 +11,6 @@ pub struct GlobalState {
     pub queue: VecDeque<Message>,
     pub chat_key: Hash,
     pub chat_id: Hash,
-    pub user_id: Hash,
     pub min_id: u32,
     pub max_id: u32,  // inclusive
 }

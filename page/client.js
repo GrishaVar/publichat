@@ -500,7 +500,8 @@ main = function() {
     //var EdDSA = require('elliptic').eddsa;
     var ec = new elliptic.eddsa('ed25519');
     var secret = get_password();
-    var key_pair = ec.keyFromSecret(secret);
+    var hashed_secret = sha3_256.array(utf8encoder.encode(secret))
+    var key_pair = ec.keyFromSecret(hashed_secret);
     var cypher_hash = sha3_256.array(cypher);
     var signature = key_pair.sign(cypher_hash).toBytes();
     return signature;
@@ -508,7 +509,8 @@ main = function() {
   function get_public_key() {
     var ec = new elliptic.eddsa('ed25519');
     var secret = get_password();
-    var key_pair = ec.keyFromSecret(secret);
+    var hashed_secret = sha3_256.array(utf8encoder.encode(secret))
+    var key_pair = ec.keyFromSecret(hashed_secret);
     return key_pair.pubBytes();
   };
   function get_time_array() {

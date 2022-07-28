@@ -7,6 +7,8 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::mem;
 
+use ed25519_dalek::Keypair;
+
 use publichat::helpers::*;
 use publichat::constants::*;
 
@@ -18,6 +20,8 @@ use common::*;
 
 mod display;
 use display::Display;
+
+use crate::crypt::make_keypair;
 
 mod crypt;
 mod comm;
@@ -102,19 +106,19 @@ fn requester(
     mut stream: TcpStream,
     state: Arc<Mutex<GlobalState>>,
     snd_rx: mpsc::Receiver<String>,
+    keypair: Keypair,
 ) -> Res {
-    let user_id = state.lock().map_err(|_| "Failed to lock state")?.user_id;
     let chat_id = state.lock().map_err(|_| "Failed to lock state")?.chat_id;
     let chat_key = state.lock().map_err(|_| "Failed to lock state")?.chat_key;
-    let mut cypher_buf = [0; CYPHER_SIZE];
-    let mut signature_buf = [0; SIGNATURE_SIZE];
+    let mut cypher_buf: Cypher;
+    let mut signature_buf: Signature;
 
     // Fetch until we get first message packet
     while state.lock().map_err(|_| "Failed to lock state")?.queue.is_empty() {
         comm::send_fetch(&mut stream, &chat_id)?;
         if let Ok(msg) = snd_rx.try_recv() {
-            cypher_buf = Message::make_cypher(&msg, &chat_key).unwrap();  // TODO: unwrap
-            signature_buf = [0; SIGNATURE_SIZE];
+            cypher_buf = Message::make_cypher(&msg, &chat_key, keypair.public.as_bytes()).unwrap();  // TODO: unwrap
+            signature_buf = crypt::sign(&cypher_buf, &keypair);
             comm::send_msg(&mut stream, &chat_id, &cypher_buf, &signature_buf)?;
         }
         thread::sleep(FQ_DELAY);
@@ -130,8 +134,8 @@ fn requester(
             state.lock().unwrap().max_id,
         )?;
         if let Ok(msg) = snd_rx.try_recv() {
-            cypher_buf = Message::make_cypher(&msg, &chat_key).unwrap();  // TODO: unwrap
-            signature_buf = [0; SIGNATURE_SIZE];
+            cypher_buf = Message::make_cypher(&msg, &chat_key, keypair.public.as_bytes()).unwrap();  // TODO: unwrap
+            signature_buf = crypt::sign(&cypher_buf, &keypair);
             comm::send_msg(&mut stream, &chat_id, &cypher_buf, &signature_buf)?;
         }
         thread::sleep(FQ_DELAY);
@@ -152,7 +156,7 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
     let (chat_key, chat_id) = crypt::hash_twice(chat.as_bytes());
 
     let user = mem::take(args.get_mut(2).ok_or("No username given")?);
-    let user_id = crypt::hash(user.as_bytes());
+    let keypair = make_keypair(user.as_bytes())?;
 
     println!("Connecting to server {:?}...", server_addr);
     let mut stream = TcpStream::connect(server_addr)?;
@@ -165,7 +169,6 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
         queue,
         chat_key,
         chat_id,
-        user_id,
         min_id: 1,
         max_id: 0,
     };
@@ -189,7 +192,7 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
     let state3 = state.clone();
     println!("Starting requester thread...");
     thread::spawn(|| {
-        match requester(stream, state3, msg_rx) {  // requester sends messages from tx to server
+        match requester(stream, state3, msg_rx, keypair) {  // requester sends messages from tx to server
             Ok(_) => println!("Request loop finished"),
             Err(e) => println!("Request loop crashed: {e}"),
         };
