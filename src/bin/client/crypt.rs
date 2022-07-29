@@ -47,17 +47,11 @@ pub fn make_keypair(input: &[u8]) -> Result<Keypair, &'static str> {
     // hash input data to get a neat 32 bytes
     let hash = hash(input);
 
-    // make privates & publics
-    let private = SecretKey::from_bytes(&hash)
+    let secret = SecretKey::from_bytes(&hash)
         .map_err(|_| "Failed to make private key")?;
-    let public = PublicKey::from(&private);
+    let public = PublicKey::from(&secret);
 
-    // copy into a pair (why isn't there just a Keypair::from::<SecretKey>??)
-    let mut all_bytes = [0; ed25519_dalek::KEYPAIR_LENGTH];
-    all_bytes[..ed25519_dalek::SECRET_KEY_LENGTH].copy_from_slice(&private.to_bytes());
-    all_bytes[ed25519_dalek::SECRET_KEY_LENGTH..].copy_from_slice(&public.to_bytes());
-
-    Keypair::from_bytes(&all_bytes).map_err(|_| "Failed to make keypair")
+    Ok(Keypair{secret, public})
 }
 
 pub fn sign(cypher: &Cypher, keypair: &Keypair) -> [u8; SIGNATURE_LENGTH] {
