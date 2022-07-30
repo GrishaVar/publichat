@@ -1,5 +1,6 @@
-use std::{fmt, time::Duration};
+use std::{str, fmt, time::{Duration, SystemTime, UNIX_EPOCH}};
 
+use crossterm::style::{Stylize, Color};
 use rand::Rng;
 use ed25519_dalek::{Signature, Verifier, PublicKey};
 
@@ -54,29 +55,40 @@ impl Message {
         let message = &padded_msg[..pad_start];
         // TODO: magic numbers ^
 
-        // assign varified randomly
+        // verify message, prep verification mark
         let verified =
             received_chat_key == &chat_key[..4]
             && server_time.abs_diff(client_time) < 10 * 1000  // no more than 10 sec  // TODO: magic numbers
             && pub_key.verify(&bytes_hash, &signature).is_ok();
+        let v_mark = if verified { '✔'.green() } else { '✗'.red().rapid_blink() };
 
-        // assert utf8
-        if std::str::from_utf8(message).is_err() {
-            return Err("Non-utf8 message!")
-        }
+        // prep username string
+        let user = &base64::encode(pub_key_bytes)[..15];
+        let colour = Color::from((
+            // user colour taken from last three bytes of public key
+            pub_key_bytes[32-3],  // TODO: magic numbers
+            pub_key_bytes[32-2],
+            pub_key_bytes[32-1],
+        ));
+        let user_c = user.on(colour).with(w_or_b(&colour));
+
+        // prep time string
+        let time = Duration::from_millis(server_time);
+        let time_s = {  // TODO: use date/time-related crate (?)
+            let time_sec = time.as_secs();
+
+            let hour = (time_sec / 3600) % 24;
+            let min = (time_sec / 60) % 60;
+            let sec = time_sec % 60;
+
+            format!("{hour}:{min}:{sec}")
+        };
+
+        // prep message string
+        let msg = str::from_utf8(message).map_err(|_| "Non-utf8 message!")?;
 
         // build string
-        let cached_str_repr = {
-            let (v_start, v_end) = match verified {
-                true  => ("\x1B[32m✔\x1B[0m", ""),
-                false => ("\x1B[31m✗", "\x1B[0m"),
-            };
-            let user = &base64::encode(pub_key_bytes)[..15];
-            let time = Duration::from_millis(server_time).as_secs();
-            // let msg = String::from_utf8_lossy(&cypher[..pad_length as usize]);
-            let msg = std::str::from_utf8(message).unwrap();
-            format!("{v_start} {user} @ {time}: {msg}{v_end}")
-        };
+        let cached_str_repr = format!("{v_mark} {user_c} {time_s} {msg}");
 
         Ok(Self {
             // time,
@@ -96,7 +108,6 @@ impl Message {
         let mut res = [0; CYPHER_SIZE];
         if text.len() > 396 - 1 { return Err(()) }  // msg too long
 
-        use std::time::{SystemTime, UNIX_EPOCH};
         let time = SystemTime::now()
             .duration_since(UNIX_EPOCH).unwrap()
             .as_millis()  // TODO: convert to u64?
@@ -129,4 +140,16 @@ impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.repr)
     }
+}
+
+fn w_or_b(colour: &Color) -> Color {  // TODO: where should this function be?
+    // Return white for dark colours, black for light colours
+    return if let Color::Rgb{r, g, b} = colour {
+        let is_dark = (
+              0.299 * f32::from(*r)
+            + 0.587 * f32::from(*g)
+            + 0.114 * f32::from(*b)
+        ) < 150.0;
+        if is_dark { Color::White } else { Color::Black }
+    } else { unreachable!("w_or_b called on non-rgb colour") }
 }
