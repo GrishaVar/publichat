@@ -23,14 +23,18 @@ Server written in Rust. FLOSS!
 #### Server
 - Clone the repository with `git clone git@github.com:GrishaVar/publichat.git`
 - Open directory with `cd publichat`
-- Launch server with `cargo r --release path/to/data/directory`
-    - data directory is where all chat data will be stored
-<!-- (launch command will change when TUI gets merged) -->
+- Launch server with `cargo r --release --bin server [socket_addr] data_directory/`
+    - `socket_addr` should be an (ip or domain) with a port
+    - `data_directory/` is where all chat data will be stored
 
-<!-- (not in master) #### TUI
+#### TUI
 - Clone the repository with `git clone git@github.com:GrishaVar/publichat.git`
 - Open directory with `cd publichat`
-- Launch client with `cargo r --release`-->
+- Launch client with `cargo r --release socket_addr chat_title username`
+    - `socket_addr` should be an (ip or domain) with a port
+
+## Visual explainer
+![Diagram of software structure](/misc/plan.png)
 
 ## Titles
 A _chat title_ is used to encrypt the chat's contents.
