@@ -7,8 +7,6 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::mem;
 
-use ed25519_dalek::Keypair;
-
 use publichat::helpers::*;
 use publichat::constants::*;
 
@@ -21,9 +19,9 @@ use common::*;
 mod display;
 use display::Display;
 
-use crate::crypt::make_keypair;
-
 mod crypt;
+use crypt::{sha, ed25519};
+
 mod comm;
 
 fn parse_header(header: &[u8; HED_OUT_SIZE]) -> Result<(u8, u32, u8, bool), &'static str> {
@@ -106,19 +104,19 @@ fn requester(
     mut stream: TcpStream,
     state: Arc<Mutex<GlobalState>>,
     snd_rx: mpsc::Receiver<String>,
-    keypair: Keypair,
+    keypair: ed25519::Keypair,
 ) -> Res {
     let chat_id = state.lock().map_err(|_| "Failed to lock state")?.chat_id;
     let chat_key = state.lock().map_err(|_| "Failed to lock state")?.chat_key;
     let mut cypher_buf: Cypher;
-    let mut signature_buf: Signature;
+    let mut signature_buf: ed25519::SigBuffer;
 
     // Fetch until we get first message packet
     while state.lock().map_err(|_| "Failed to lock state")?.queue.is_empty() {
         comm::send_fetch(&mut stream, &chat_id)?;
         if let Ok(msg) = snd_rx.try_recv() {
             cypher_buf = Message::make_cypher(&msg, &chat_key, keypair.public.as_bytes()).unwrap();  // TODO: unwrap
-            signature_buf = crypt::sign(&cypher_buf, &keypair);
+            signature_buf = ed25519::sign(&cypher_buf, &keypair);
             comm::send_msg(&mut stream, &chat_id, &cypher_buf, &signature_buf)?;
         }
         thread::sleep(FQ_DELAY);
@@ -135,7 +133,7 @@ fn requester(
         )?;
         if let Ok(msg) = snd_rx.try_recv() {
             cypher_buf = Message::make_cypher(&msg, &chat_key, keypair.public.as_bytes()).unwrap();  // TODO: unwrap
-            signature_buf = crypt::sign(&cypher_buf, &keypair);
+            signature_buf = ed25519::sign(&cypher_buf, &keypair);
             comm::send_msg(&mut stream, &chat_id, &cypher_buf, &signature_buf)?;
         }
         thread::sleep(FQ_DELAY);
@@ -153,11 +151,11 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
         .next().ok_or("Zero addrs received?")?;
 
     let chat = mem::take(args.get_mut(1).ok_or("No title given")?);
-    let chat_key = crypt::hash(chat.as_bytes());
-    let chat_id = crypt::hash(&chat_key);
+    let chat_key = sha::hash(chat.as_bytes());
+    let chat_id = sha::hash(&chat_key);
 
     let user = mem::take(args.get_mut(2).ok_or("No username given")?);
-    let keypair = make_keypair(user.as_bytes())?;
+    let keypair = ed25519::make_keypair(user.as_bytes())?;
 
     println!("Connecting to server {:?}...", server_addr);
     let mut stream = TcpStream::connect(server_addr)?;

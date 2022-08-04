@@ -2,11 +2,10 @@ use std::{str, fmt, time::{Duration, SystemTime, UNIX_EPOCH}};
 
 use crossterm::style::{Stylize, Color};
 use rand::Rng;
-use ed25519_dalek::{Signature, Verifier, PublicKey};
 
 use publichat::constants::*;  // TODO: Signature defined twice
 
-use crate::crypt::{apply_aes, hash};
+use crate::crypt::*;
 
 #[derive(Debug)]
 pub struct Message {
@@ -27,28 +26,23 @@ impl Message {
     ) -> Result<Self, &'static str> {
         let server_time = u64::from_be_bytes(bytes[MSG_OUT_TIME..][..TIME_SIZE].try_into().unwrap());
         let mut cypher: Cypher = bytes[MSG_OUT_CYPHER..][..CYPHER_SIZE].try_into().unwrap();
-        let signature = &bytes[MSG_OUT_SIG..][..SIGNATURE_SIZE];
+        let signature = bytes[MSG_OUT_SIG..][..SIGNATURE_SIZE].try_into().unwrap();
 
-        // prepare signature
-        let bytes_hash = hash(&cypher.as_slice());
-        let signature = Signature::from_bytes(signature)
-            .map_err(|_| "Failed to make signature")?;
+        // prepare for signature check before cypher gets decrypted
+        let hashed_cypher = sha::hash(cypher.as_slice());
 
         // decrypt chat in-place
-        apply_aes(chat_key, &mut cypher);
+        aes::apply(chat_key, &mut cypher);
         let message_data = cypher;  // rename variable for clarity
 
+        // deconstruct message_data
         // TODO: magic numbers
         let received_chat_key = &message_data[..4];
         let client_time = u64::from_be_bytes(message_data[4..][..8].try_into().unwrap());
-        let pub_key_bytes = &message_data[4+8..][..32];
+        let pub_key = &message_data[4+8..][..32].try_into().unwrap();
         let padded_msg = &message_data[4+8+32..];
 
-        // prepare public key for signature verificaiton
-        let pub_key = PublicKey::from_bytes(pub_key_bytes)
-            .map_err(|_| "Failed to make pub key")?;
-
-        // find padding end
+        // find padding
         let pad_start = padded_msg.iter()
             .rposition(|&b| b == chat_key[0])
             .ok_or("Invalid pad: indicator not found")?;
@@ -59,16 +53,16 @@ impl Message {
         let verified =
             received_chat_key == &chat_key[..4]
             && server_time.abs_diff(client_time) < 10 * 1000  // no more than 10 sec  // TODO: magic numbers
-            && pub_key.verify(&bytes_hash, &signature).is_ok();
+            && ed25519::verify(&hashed_cypher, pub_key, signature)?;
         let v_mark = if verified { '✔'.green() } else { '✗'.red().rapid_blink() };
 
         // prep username string
-        let user = &base64::encode(pub_key_bytes)[..15];
+        let user = &base64::encode(pub_key)[..15];
         let colour = Color::from((
             // user colour taken from last three bytes of public key
-            pub_key_bytes[32-3],  // TODO: magic numbers
-            pub_key_bytes[32-2],
-            pub_key_bytes[32-1],
+            pub_key[32-3],  // TODO: magic numbers
+            pub_key[32-2],
+            pub_key[32-1],
         ));
         let user_c = user.on(colour).with(w_or_b(&colour));
 
@@ -130,7 +124,7 @@ impl Message {
         );
 
         // AES
-        apply_aes(chat_key, &mut res);
+        aes::apply(chat_key, &mut res);
 
         Ok(res)
     }
