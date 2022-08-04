@@ -15,11 +15,11 @@ pub fn hash(data: &[u8]) -> Hash {
     res
 }
 
-type AesCtr = Ctr128BE<Aes256>;
-const IV: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
-
 pub fn apply_aes(key: &Hash, buf: &mut Cypher) {
-    let mut cypher = AesCtr::new(key.into(), &IV.into());
+    // applies AES in-place on buf as side-effect
+    const IV: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
+
+    let mut cypher = Ctr128BE::<Aes256>::new(key.into(), &IV.into());
     cypher.apply_keystream(buf);
 }
 
