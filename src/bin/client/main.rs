@@ -153,7 +153,8 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
         .next().ok_or("Zero addrs received?")?;
 
     let chat = mem::take(args.get_mut(1).ok_or("No title given")?);
-    let (chat_key, chat_id) = crypt::hash_twice(chat.as_bytes());
+    let chat_key = crypt::hash(chat.as_bytes());
+    let chat_id = crypt::hash(&chat_key);
 
     let user = mem::take(args.get_mut(2).ok_or("No username given")?);
     let keypair = make_keypair(user.as_bytes())?;
