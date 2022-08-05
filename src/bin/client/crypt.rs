@@ -22,6 +22,7 @@ pub mod aes {
         // applies AES in-place on buf as side-effect
         const IV: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
 
+        // TODO: key is always the same; generate decrypter once in main?
         let mut cypher = Ctr128BE::<Aes256>::new(key.into(), &IV.into());
         cypher.apply_keystream(buf);
     }
