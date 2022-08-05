@@ -3,6 +3,8 @@ use std::net::TcpStream;
 use publichat::helpers::*;
 use publichat::constants::*;
 
+use crate::crypt::ed25519;
+
 const fn pad_buf<const L: usize>(pad: [u8; PADDING_SIZE]) -> [u8; L] {
     // Create an empty buffer, put pad in the beginning
     // and END_PADDING at the end. This function is const!
@@ -25,7 +27,7 @@ pub fn send_msg(  // TODO: create global "smrt" crate with en/decoding functions
     stream: &mut TcpStream,
     chat: &Hash,
     cypher: &Cypher,
-    signature: &Signature,
+    signature: &ed25519::SigBuffer,
 ) -> Res {
     // TODO: rename constants to something direction-agnostic
     let mut buf = EMPTY_MSG_BUF;

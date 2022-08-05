@@ -6,7 +6,6 @@ use rand::Rng;
 use publichat::constants::*;
 use crate::crypt::*;
 use crate::common::{
-    VERIFY_CHAT_ID_SIZE,
     VERIFY_TOLERANCE_MS,
     USER_ID_CHAR_COUNT,
 };
@@ -46,7 +45,7 @@ impl Message {
         let msg_data = cypher;  // rename variable for clarity
 
         // deconstruct msg_data
-        let (received_chat_key, msg_data) = msg_data.split_at(VERIFY_CHAT_ID_SIZE);
+        let (received_chat_key, msg_data) = msg_data.split_at(CYPHER_CHAT_KEY_SIZE);
         let (client_time, msg_data) = msg_data.split_at(TIME_SIZE);
         let (pub_key, padded_msg) = msg_data.split_at(HASH_SIZE);
 
@@ -119,17 +118,17 @@ impl Message {
             .as_millis().try_into().expect("Alright, futureboy");
 
         // copy in basic data
-        res[..VERIFY_CHAT_ID_SIZE].copy_from_slice(&chat_key[..4]);
-        res[VERIFY_CHAT_ID_SIZE..][..TIME_SIZE].copy_from_slice(&time.to_be_bytes());
-        res[VERIFY_CHAT_ID_SIZE+TIME_SIZE..][..HASH_SIZE].copy_from_slice(pub_key);
+        res[..CYPHER_CHAT_KEY_SIZE].copy_from_slice(&chat_key[..4]);
+        res[CYPHER_CHAT_KEY_SIZE..][..TIME_SIZE].copy_from_slice(&time.to_be_bytes());
+        res[CYPHER_CHAT_KEY_SIZE+TIME_SIZE..][..HASH_SIZE].copy_from_slice(pub_key);
 
         // copy in message
-        res[VERIFY_CHAT_ID_SIZE+TIME_SIZE+HASH_SIZE..][..text.len()]
+        res[CYPHER_CHAT_KEY_SIZE+TIME_SIZE+HASH_SIZE..][..text.len()]
             .copy_from_slice(text.as_bytes());
 
         // padding
         let mut rng = rand::thread_rng();
-        let pad_start_pos = VERIFY_CHAT_ID_SIZE+TIME_SIZE+HASH_SIZE+text.len();
+        let pad_start_pos = CYPHER_CHAT_KEY_SIZE+TIME_SIZE+HASH_SIZE+text.len();
         res[pad_start_pos] = chat_key[0];  // pad indicator
         res[pad_start_pos+1..].fill_with(||
             rng.gen_range(1u8..=0xff).wrapping_add(chat_key[0])

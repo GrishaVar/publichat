@@ -15,6 +15,5 @@ pub struct GlobalState {
     pub max_id: u32,  // inclusive
 }
 
-pub const VERIFY_CHAT_ID_SIZE: usize = 4;  // how many bytes of chat id are sent
 pub const VERIFY_TOLERANCE_MS: u64 = 10 * 1000;  // time between server and client
 pub const USER_ID_CHAR_COUNT: usize = 15;  // how many b64 chars are displayed
