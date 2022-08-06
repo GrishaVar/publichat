@@ -1,9 +1,9 @@
 pub mod sha {
     use sha3::{Sha3_256, Digest};
-    use publichat::constants::*;
+    use publichat::buffers::Hash;
 
-    pub fn hash(data: &[u8]) -> Hash {
-        let mut res = [0; HASH_SIZE];
+    pub fn hash(data: &[u8]) -> Hash::Buf {
+        let mut res = Hash::DEFAULT;
 
         let mut hasher = Sha3_256::new();
         hasher.update(data);
@@ -16,9 +16,9 @@ pub mod sha {
 pub mod aes {
     use aes::{Aes256, cipher::{KeyIvInit, StreamCipher}};
     use ctr::Ctr128BE;
-    use publichat::constants::*;
+    use publichat::buffers::{Hash, Cypher};
 
-    pub fn apply(key: &Hash, buf: &mut Cypher) {
+    pub fn apply(key: &Hash::Buf, buf: &mut Cypher::Buf) {
         // applies AES in-place on buf as side-effect
         const IV: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
 
@@ -30,8 +30,15 @@ pub mod aes {
 
 pub mod ed25519 {
     pub use ed25519_dalek::Keypair;  // allow use outside
-    use ed25519_dalek::{SecretKey, PublicKey, Signer, Signature, SIGNATURE_LENGTH, Verifier};
-    use publichat::constants::*;
+    use ed25519_dalek::{
+        SecretKey,
+        PublicKey,
+        Signature,
+        SIGNATURE_LENGTH,
+        Signer,
+        Verifier,
+    };
+    use publichat::buffers::{Hash, Cypher};
 
     pub type SigBuffer = [u8; SIGNATURE_LENGTH];
 
@@ -46,14 +53,14 @@ pub mod ed25519 {
         Ok(Keypair{secret, public})
     }
 
-    pub fn sign(cypher: &Cypher, keypair: &Keypair) -> SigBuffer {
+    pub fn sign(cypher: &Cypher::Buf, keypair: &Keypair) -> SigBuffer {
         let hash = super::sha::hash(cypher);
         keypair.sign(&hash).to_bytes()
     }
 
     pub fn verify(
-        cypher_hash: &Hash,
-        pub_key: &Hash,
+        cypher_hash: &Hash::Buf,
+        pub_key: &Hash::Buf,
         signature: &SigBuffer,
     ) -> Result<bool, &'static str> {
         let pub_key = PublicKey::from_bytes(pub_key)
