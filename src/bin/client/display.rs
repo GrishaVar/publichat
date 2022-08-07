@@ -211,7 +211,7 @@ impl Display {
         
         // Not all messages fit on screen
         match self.view {
-            ViewPos::Index { msg_id, chr_id } => {
+            ViewPos::Index { msg_id, .. } => {  // TODO: use chr_id
                 // cursor already at right position, draw one msg at a time
                 // TODO: print start.msg partial
                 for msg in state.queue.range(1+usize::from(msg_id)..) {
@@ -266,10 +266,10 @@ impl Display {
         self.view = match self.view {
             ViewPos::Last => ViewPos::Last,
             ViewPos::Index{msg_id, chr_id} => if up {
-                ViewPos::Index{msg_id: msg_id-1, chr_id: chr_id}
+                ViewPos::Index{msg_id: msg_id-1, chr_id}
             } else {
                 // TODO: possible ViewPos::Last
-                ViewPos::Index{msg_id: msg_id+1, chr_id: chr_id}
+                ViewPos::Index{msg_id: msg_id+1, chr_id}
             },
         };
     }
@@ -287,7 +287,9 @@ impl Display {
                 self.draw_footer()
             },
             (Mod::NONE, Enter) => {  // send message
-                self.msg_tx.send(mem::take(&mut self.user_msg));
+                use std::io::{Error, ErrorKind::Other};
+                self.msg_tx.send(mem::take(&mut self.user_msg))
+                    .map_err(|_| Error::new(Other, "msg_rx closed"))?;
                 self.draw_footer()
             },
             // (Mod::CONTROL, Backspace) => Ok(()),  // remove word
