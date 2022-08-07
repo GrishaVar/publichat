@@ -74,10 +74,10 @@ fn listener(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
             continue;  // initial fetch finished, move to next packet
         }
 
-        if s.max_id + 1 < first_id ||  // disconnected ahead
-           s.min_id > last_id + 1 ||  // disconnected behind
-           (s.min_id <= first_id && last_id <= s.max_id) ||  // already have this
-           (first_id < s.min_id && s.max_id < last_id)  // overflow on both sides
+        if s.max_id + 1 < first_id  // disconnected ahead
+           || s.min_id > last_id + 1  // disconnected behind
+           || (s.min_id <= first_id && last_id <= s.max_id)  // already have this
+           || (first_id < s.min_id && s.max_id < last_id)  // overflow on both sides
         { continue }  // skip all these
 
         if forward {
@@ -86,7 +86,6 @@ fn listener(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
                 assert_eq!(s.max_id + 1, first_id + i);
                 for msg in buf.chunks_exact(MsgOut::SIZE).skip(i as usize) {
                     let msg = Message::new(msg.try_into().unwrap(), &s.chat_key)?;
-                    // println!("{}", msg);
                     s.queue.push_back(msg);
                 }
                 // buf.chunks_exact(MSG_OUT_SIZE)
@@ -145,7 +144,7 @@ fn requester(
 }
 
 fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
-    println!("Starting client...");
+    eprintln!("Starting client...");
     // arguments: addr:port title user
 
     let mut args = std::env::args().skip(1).collect::<Vec<_>>();
@@ -161,9 +160,9 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
     let user = mem::take(args.get_mut(2).ok_or("No username given")?);
     let keypair = ed25519::make_keypair(user.as_bytes())?;
 
-    println!("Connecting to server {:?}...", server_addr);
+    eprintln!("Connecting to server {:?}...", server_addr);
     let mut stream = TcpStream::connect(server_addr)?;
-    println!("Connected!");
+    eprintln!("Connected!");
 
     stream.write_all(b"SMRT")?;
 
@@ -183,29 +182,29 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
     // start listener thread
     let stream2 = stream.try_clone()?;
     let state2 = state.clone();
-    println!("Starting listener thread...");
+    eprintln!("Starting listener thread...");
     thread::spawn(|| {
         match listener(stream2, state2) {
-            Ok(_) => println!("Listener thread finished"),
-            Err(e) => println!("Listener thread crashed: {e}"),
+            Ok(_) => eprintln!("Listener thread finished"),
+            Err(e) => eprintln!("Listener thread crashed: {e}"),
         }
     });
 
     // start requester thread
     let state3 = state.clone();
-    println!("Starting requester thread...");
+    eprintln!("Starting requester thread...");
     thread::spawn(|| {
         match requester(stream, state3, msg_rx, keypair) {  // requester sends messages from tx to server
-            Ok(_) => println!("Request loop finished"),
-            Err(e) => println!("Request loop crashed: {e}"),
+            Ok(_) => eprintln!("Request loop finished"),
+            Err(e) => eprintln!("Request loop crashed: {e}"),
         };
     });
 
     // start drawer thread
-    println!("Starting drawer...");
+    eprintln!("Starting drawer...");
     match Display::start(state, msg_tx) {  // drawer recieves text input and send to requester
-        Ok(_) => println!("Drawer finished"),
-        Err(e) => println!("Drawer crashed: {e}"),
+        Ok(_) => eprintln!("Drawer finished"),
+        Err(e) => eprintln!("Drawer crashed: {e}"),
     }
 
     Ok(())
