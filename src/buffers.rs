@@ -16,15 +16,20 @@ macro_rules! build_buf {
             // const SIZES: [usize; Self::LEN] = [ $( $len, )* ];
 
             type NTuple<'a> = ($( rep!($len; &'a [u8]), )*);
+            type NTupleMut<'a> = ($( rep!($len; &'a mut [u8]), )*);
+
+            #[allow(unused_assignments)]
+            #[allow(clippy::eval_order_dependence)]
             pub fn split(buf: &Buf) -> NTuple {
-                let mut _b = buf.as_slice();
-                ($({let (cur, new) = _b.split_at($len); _b = new; cur},)*)
+                let mut buf = buf.as_slice();
+                ($({let (cur, new) = buf.split_at($len); buf = new; cur},)*)
             }
 
-            type NTupleMut<'a> = ($( rep!($len; &'a mut [u8]), )*);
+            #[allow(unused_assignments)]
+            #[allow(clippy::eval_order_dependence)]
             pub fn split_mut(buf: &mut Buf) -> NTupleMut {
-                let mut _b = buf.as_mut_slice();
-                ($({let (cur, new) = _b.split_at_mut($len); _b = new; cur},)*)
+                let mut buf = buf.as_mut_slice();
+                ($({let (cur, new) = buf.split_at_mut($len); buf = new; cur},)*)
             }
 
             $( $( $rest )+ )?
