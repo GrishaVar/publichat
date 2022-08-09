@@ -7,9 +7,8 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::mem;
 
-use publichat::buffers::MsgOut;
 use publichat::helpers::*;
-use publichat::buffers::{Cypher, MsgHead};
+use publichat::buffers::{msg_head, msg_out, cypher::Buf as CypherBuf};
 
 mod msg;
 use msg::Message;
@@ -25,12 +24,12 @@ use crypt::{sha, ed25519};
 
 mod comm;
 
-fn parse_header(header: &MsgHead::Buf) -> Result<(u8, u32, u8, bool), &'static str> {
+fn parse_header(header: &msg_head::Buf) -> Result<(u8, u32, u8, bool), &'static str> {
     // returns (chat id byte, message id, message count, forward)
-    let (pad_buf, cid_buf, mid_buf, count_buf) = MsgHead::split(header);
+    let (pad_buf, cid_buf, mid_buf, count_buf) = msg_head::split(header);
     let mut msg_id = [0; 4];  // TODO: this is ugly. Consider combining cid and mid
     msg_id[1..].copy_from_slice(mid_buf);  // can't fail
-    if pad_buf == MsgHead::PAD {
+    if pad_buf == msg_head::PAD {
         Ok((
             cid_buf[0],  // can't fail
             u32::from_be_bytes(msg_id),
@@ -45,7 +44,7 @@ fn parse_header(header: &MsgHead::Buf) -> Result<(u8, u32, u8, bool), &'static s
 
 
 fn listener(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
-    let mut hed_buf = MsgHead::DEFAULT;
+    let mut hed_buf = msg_head::DEFAULT;
     loop {
         read_exact(&mut stream, &mut hed_buf, "Failed to read head buffer")?;
         // TODO: what should happen when this fails?
@@ -55,7 +54,7 @@ fn listener(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
         if count == 0 { continue }  // skip no messages
 
         // read messages expected from header
-        let mut buf = vec![0; count as usize * MsgOut::SIZE];  // TODO: consider array
+        let mut buf = vec![0; count as usize * msg_out::SIZE];  // TODO: consider array
         read_exact(&mut stream, &mut buf, "Failed to bulk read fetch")?;
 
         let mut s = state.lock().map_err(|_| "Failed to lock state")?;
@@ -65,7 +64,7 @@ fn listener(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
 
         if s.min_id > s.max_id {  // initial fetch
             // handle initial fetch separately; skip all checks
-            for msg in buf.chunks_exact(MsgOut::SIZE) {
+            for msg in buf.chunks_exact(msg_out::SIZE) {
                 let msg = Message::new(msg.try_into().unwrap(), &s.chat_key)?;
                 s.queue.push_back(msg);
             }
@@ -84,7 +83,7 @@ fn listener(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
             if last_id > s.max_id {  // good proper data here
                 let i = if first_id <= s.max_id {s.max_id-first_id+1} else {0};
                 assert_eq!(s.max_id + 1, first_id + i);
-                for msg in buf.chunks_exact(MsgOut::SIZE).skip(i as usize) {
+                for msg in buf.chunks_exact(msg_out::SIZE).skip(i as usize) {
                     let msg = Message::new(msg.try_into().unwrap(), &s.chat_key)?;
                     s.queue.push_back(msg);
                 }
@@ -111,8 +110,8 @@ fn requester(
 ) -> Res {
     let chat_id = state.lock().map_err(|_| "Failed to lock state")?.chat_id;
     let chat_key = state.lock().map_err(|_| "Failed to lock state")?.chat_key;
-    let mut cypher_buf: Cypher::Buf;
-    let mut signature_buf: ed25519::SigBuffer;
+    let mut cypher_buf: CypherBuf;
+    let mut signature_buf: ed25519::SigBuf;
 
     // Fetch until we get first message packet
     while state.lock().map_err(|_| "Failed to lock state")?.queue.is_empty() {

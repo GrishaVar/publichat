@@ -61,24 +61,24 @@ macro_rules! prepad {  // apply pad_buf
 // server-side
 // TODO: use in server code
 // TODO: combine cypher and sig into one block? Server doesn't need them separately
-build_buf!(MsgSt; TIME_SIZE, CYPHER_SIZE, SIGNATURE_SIZE);
+build_buf!(msg_st; TIME_SIZE, CYPHER_SIZE, SIGNATURE_SIZE);
 
 // server -> client
-build_buf!(MsgHead; PADDING_SIZE, 1, MSG_ID_SIZE, 1;
+build_buf!(msg_head; PADDING_SIZE, 1, MSG_ID_SIZE, 1;
     pub use crate::constants::MSG_PADDING as PAD;  // includes padding
 );
-build_buf!(MsgOut; TIME_SIZE, CYPHER_SIZE, SIGNATURE_SIZE);
+build_buf!(msg_out; TIME_SIZE, CYPHER_SIZE, SIGNATURE_SIZE);
 
 // client -> server
-build_buf!(Fetch; CHAT_ID_SIZE; prepad!(FETCH_PADDING););
-build_buf!(Query; CHAT_ID_SIZE, 1, MSG_ID_SIZE; prepad!(QUERY_PADDING););
-build_buf!(MsgIn; CHAT_ID_SIZE, CYPHER_SIZE, SIGNATURE_SIZE; prepad!(SEND_PADDING););
+build_buf!(fetch; CHAT_ID_SIZE; prepad!(FETCH_PADDING););
+build_buf!(query; CHAT_ID_SIZE, 1, MSG_ID_SIZE; prepad!(QUERY_PADDING););
+build_buf!(msg_in; CHAT_ID_SIZE, CYPHER_SIZE, SIGNATURE_SIZE; prepad!(SEND_PADDING););
 
 // client-side
-build_buf!(Cypher; CYPHER_CHAT_KEY_SIZE, TIME_SIZE, HASH_SIZE, CYPHER_PAD_MSG_SIZE);
+build_buf!(cypher; CYPHER_CHAT_KEY_SIZE, TIME_SIZE, HASH_SIZE, CYPHER_PAD_MSG_SIZE);
 
 // misc
 // splitting not needed, make for consistency
 // TODO: optionally skip functions?
-build_buf!(Hash; HASH_SIZE);
-build_buf!(Signature; SIGNATURE_SIZE);
+build_buf!(hash; HASH_SIZE);
+build_buf!(signature; SIGNATURE_SIZE);

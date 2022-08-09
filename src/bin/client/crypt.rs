@@ -1,9 +1,9 @@
 pub mod sha {
     use sha3::{Sha3_256, Digest};
-    use publichat::buffers::Hash;
+    use publichat::buffers::hash;
 
-    pub fn hash(data: &[u8]) -> Hash::Buf {
-        let mut res = Hash::DEFAULT;
+    pub fn hash(data: &[u8]) -> hash::Buf {
+        let mut res = hash::DEFAULT;
 
         let mut hasher = Sha3_256::new();
         hasher.update(data);
@@ -16,9 +16,9 @@ pub mod sha {
 pub mod aes {
     use aes::{Aes256, cipher::{KeyIvInit, StreamCipher}};
     use ctr::Ctr128BE;
-    use publichat::buffers::{Hash, Cypher};
+    use publichat::buffers::{hash::Buf as HashBuf, cypher::Buf as CypherBuf};
 
-    pub fn apply(key: &Hash::Buf, buf: &mut Cypher::Buf) {
+    pub fn apply(key: &HashBuf, buf: &mut CypherBuf) {
         // applies AES in-place on buf as side-effect
         const IV: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];
 
@@ -38,9 +38,9 @@ pub mod ed25519 {
         Signer,
         Verifier,
     };
-    use publichat::buffers::{Hash, Cypher};
+    use publichat::buffers::{hash::Buf as HashBuf, cypher::Buf as CypherBuf};
 
-    pub type SigBuffer = [u8; SIGNATURE_LENGTH];
+    pub type SigBuf = [u8; SIGNATURE_LENGTH];
 
     pub fn make_keypair(input: &[u8]) -> Result<Keypair, &'static str> {
         // hash input data to get a neat 32 bytes
@@ -53,15 +53,15 @@ pub mod ed25519 {
         Ok(Keypair{secret, public})
     }
 
-    pub fn sign(cypher: &Cypher::Buf, keypair: &Keypair) -> SigBuffer {
+    pub fn sign(cypher: &CypherBuf, keypair: &Keypair) -> SigBuf {
         let hash = super::sha::hash(cypher);
         keypair.sign(&hash).to_bytes()
     }
 
     pub fn verify(
-        cypher_hash: &Hash::Buf,
-        pub_key: &Hash::Buf,
-        signature: &SigBuffer,
+        cypher_hash: &HashBuf,
+        pub_key: &HashBuf,
+        signature: &SigBuf,
     ) -> Result<bool, &'static str> {
         let pub_key = PublicKey::from_bytes(pub_key)
             .map_err(|_| "Failed to make pub key")?;

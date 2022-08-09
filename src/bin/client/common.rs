@@ -1,6 +1,6 @@
 use std::{time::Duration, collections::VecDeque};
 
-use publichat::buffers::Hash;
+use publichat::buffers::hash::Buf as HashBuf;
 use crate::msg::Message;
 
 pub const FQ_DELAY: Duration = Duration::from_millis(200);
@@ -9,8 +9,8 @@ pub const _DISP_DELAY: Duration = Duration::from_millis(1000 / DISP_FPS);
 
 pub struct GlobalState {
     pub queue: VecDeque<Message>,
-    pub chat_key: Hash::Buf,
-    pub chat_id: Hash::Buf,
+    pub chat_key: HashBuf,
+    pub chat_id: HashBuf,
     pub min_id: u32,
     pub max_id: u32,  // inclusive
 }

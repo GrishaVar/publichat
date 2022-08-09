@@ -2,25 +2,25 @@ use std::net::TcpStream;
 
 use publichat::helpers::*;
 use publichat::buffers::{
-    Cypher,
-    MsgIn,
-    Fetch,
-    Query,
-    Hash,
+    cypher::Buf as CypherBuf,
+    hash::Buf as HashBuf,
+    msg_in,
+    fetch,
+    query,
 };
 
-use crate::crypt::ed25519;
+use crate::crypt::ed25519::SigBuf;
 
 pub fn send_msg(
     stream: &mut TcpStream,
-    chat: &Hash::Buf,
-    cypher: &Cypher::Buf,
-    signature: &ed25519::SigBuffer,
+    chat: &HashBuf,
+    cypher: &CypherBuf,
+    signature: &SigBuf,
 ) -> Res {
     // TODO: rename constants to something direction-agnostic
     // TODO: create global buffer builder functions
-    let mut buf = MsgIn::PREPAD;
-    let (cid_buf, cy_buf, sig_buf) = MsgIn::pad_split_mut(&mut buf);
+    let mut buf = msg_in::PREPAD;
+    let (cid_buf, cy_buf, sig_buf) = msg_in::pad_split_mut(&mut buf);
 
     cid_buf.copy_from_slice(chat);
     cy_buf.copy_from_slice(cypher);
@@ -29,9 +29,9 @@ pub fn send_msg(
     full_write(stream, &buf, "Failed to send message")
 }
 
-pub fn send_fetch(stream: &mut TcpStream, chat: &Hash::Buf) -> Res {
-    let mut buf = Fetch::PREPAD;
-    let (cid_buf,) = Fetch::pad_split_mut(&mut buf);
+pub fn send_fetch(stream: &mut TcpStream, chat: &HashBuf) -> Res {
+    let mut buf = fetch::PREPAD;
+    let (cid_buf,) = fetch::pad_split_mut(&mut buf);
 
     cid_buf.copy_from_slice(chat);
 
@@ -40,14 +40,14 @@ pub fn send_fetch(stream: &mut TcpStream, chat: &Hash::Buf) -> Res {
 
 pub fn send_query(
     stream: &mut TcpStream,
-    chat: &Hash::Buf,
+    chat: &HashBuf,
     forwards: bool,
     count: u8,
     id: u32,
 ) -> Res {
     if count > 0x7f || id > 0xffffff { return Err("Query input too large") }
-    let mut buf = Query::PREPAD;
-    let (cid_buf, args_buf, mid_buf) = Query::pad_split_mut(&mut buf);
+    let mut buf = query::PREPAD;
+    let (cid_buf, args_buf, mid_buf) = query::pad_split_mut(&mut buf);
 
     cid_buf.copy_from_slice(chat);
     args_buf[0] = if forwards {count | 0x80} else {count};

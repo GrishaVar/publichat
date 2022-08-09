@@ -3,7 +3,7 @@ use std::{str, fmt, time::{Duration, SystemTime, UNIX_EPOCH}};
 use crossterm::style::{Stylize, Color};
 use rand::Rng;
 
-use publichat::buffers::{Hash, Cypher, MsgOut};
+use publichat::buffers::{hash::Buf as HashBuf, cypher, msg_out};
 use crate::crypt::*;
 use crate::common::{
     VERIFY_TOLERANCE_MS,
@@ -24,16 +24,16 @@ pub struct Message {
 
 impl Message {
     pub fn new(  // parse server's bytes into message text
-        mut bytes: MsgOut::Buf,
-        chat_key: &Hash::Buf,
+        mut bytes: msg_out::Buf,
+        chat_key: &HashBuf,
     ) -> Result<Self, &'static str> {
         // deconstruct bytes
-        let (st_buf, c_buf, s_buf) = MsgOut::split_mut(&mut bytes);
+        let (st_buf, c_buf, s_buf) = msg_out::split_mut(&mut bytes);
 
         // shadow to change types (unwraps CANNOT fail here; len check skipped!)
         let server_time = u64::from_be_bytes(st_buf.try_into().unwrap());
-        let cypher: &mut Cypher::Buf = c_buf.try_into().unwrap();
-        let signature: &ed25519::SigBuffer = (&*s_buf).try_into().unwrap();
+        let cypher: &mut cypher::Buf = c_buf.try_into().unwrap();
+        let signature: &ed25519::SigBuf = (&*s_buf).try_into().unwrap();
             // TODO: the &* casts the `&mut [u8]` into a `&[u8]`. Ugly!
 
         // prepare for signature check before cypher gets decrypted
@@ -44,11 +44,11 @@ impl Message {
         let cypher_data = cypher;  // rename variable for clarity
 
         // deconstruct msg_data
-        let (ck_buf, ct_buf, pk_buf, msg_buf) = Cypher::split(cypher_data);
+        let (ck_buf, ct_buf, pk_buf, msg_buf) = cypher::split(cypher_data);
 
         // shadow to change types (unwraps CANNOT fail here; len check skipped!)
         let client_time = u64::from_be_bytes(ct_buf.try_into().unwrap());
-        let pub_key: &Hash::Buf = pk_buf.try_into().unwrap();
+        let pub_key: &HashBuf = pk_buf.try_into().unwrap();
 
         // find padding
         let pad_start = msg_buf.iter()
@@ -104,15 +104,15 @@ impl Message {
 
     pub fn make_cypher(
         text: &str,
-        chat_key: &Hash::Buf,
-        pub_key: &Hash::Buf,
-    ) -> Result<Cypher::Buf, ()> {
+        chat_key: &HashBuf,
+        pub_key: &HashBuf,
+    ) -> Result<cypher::Buf, ()> {
         let time: u64 = SystemTime::now()
             .duration_since(UNIX_EPOCH).expect("Woah, get with the times!")
             .as_millis().try_into().expect("Alright, futureboy");
         
-        let mut res = Cypher::DEFAULT;
-        let (ck_buf, t_buf, pk_buf, msg_buf) = Cypher::split_mut(&mut res);
+        let mut res = cypher::DEFAULT;
+        let (ck_buf, t_buf, pk_buf, msg_buf) = cypher::split_mut(&mut res);
         
         if text.len() > msg_buf.len() - 1 { return Err(()) }  // msg too long
 
