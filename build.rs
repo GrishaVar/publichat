@@ -51,7 +51,7 @@ fn main() {
     let html_index_data = html_index.as_bytes();
     #[cfg(feature = "minify")] let html_index_data = &minify(html_index_data, &CONFIG);
     let mut file = File::create(["target/index", suf, ext].concat()).unwrap();
-    file.write_all(&html_index_data).unwrap();
+    file.write_all(html_index_data).unwrap();
 
     // mobile - load, minify (copy paste of index)
     println!("cargo:rerun-if-changed=page/mobile.html");
@@ -59,5 +59,5 @@ fn main() {
     let html_mobile_data = html_mobile.as_bytes();
     #[cfg(feature = "minify")] let html_mobile_data = &minify(html_mobile_data, &CONFIG);
     let mut file = File::create(["target/mobile", suf, ext].concat()).unwrap();
-    file.write_all(&html_mobile_data).unwrap();
+    file.write_all(html_mobile_data).unwrap();
 }
