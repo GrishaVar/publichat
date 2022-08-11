@@ -205,7 +205,7 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
     let state_c = state.clone();
     eprintln!("Starting requester thread...");
     thread::spawn(|| {
-        match requester(stream_c, state_c) {  // requester sends messages from tx to server
+        match requester(stream_c, state_c) {
             Ok(_) => eprintln!("Requester loop finished"),
             Err(e) => eprintln!("Requester loop crashed: {e}"),
         };
@@ -216,7 +216,7 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
     let state_c = state.clone();
     eprintln!("Starting requester thread...");
     thread::spawn(|| {
-        match sender(stream_c, state_c, msg_rx, keypair) {  // requester sends messages from tx to server
+        match sender(stream_c, state_c, msg_rx, keypair) {
             Ok(_) => eprintln!("Sender loop finished"),
             Err(e) => eprintln!("Sender loop crashed: {e}"),
         };
@@ -224,7 +224,7 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
 
     // start drawer thread
     eprintln!("Starting drawer...");
-    match Display::start(state, msg_tx) {  // drawer recieves text input and send to requester
+    match Display::start(state, msg_tx, chat.as_str()) {
         Ok(_) => eprintln!("Drawer finished"),
         Err(e) => eprintln!("Drawer crashed: {e}"),
     }

@@ -35,7 +35,7 @@ enum ViewPos {
     Index{msg_id: u16, chr_id: u8},  // id of TOP message, index of its first char
 }
 
-pub struct Display {
+pub struct Display<'a> {
     state: Arc<Mutex<GlobalState>>,
     msg_tx: mpsc::Sender<String>,
     stdout: std::io::Stdout,
@@ -43,13 +43,15 @@ pub struct Display {
     user_msg: String,  // stuff the user is typing
     view: ViewPos,
     last_update: SystemTime,
+    chat_name: &'a str,
 }
 
 // WARNING: this file is very OO; proceed with your own risk!
-impl Display {
+impl<'a> Display<'a> {
     pub fn start(
         state: Arc<Mutex<GlobalState>>,
         msg_tx: mpsc::Sender<String>,
+        chat_name: &str,
     ) -> crossterm::Result<()> {
         // setup
         let mut stdout = std::io::stdout();
@@ -70,6 +72,7 @@ impl Display {
             user_msg: String::with_capacity(50),
             view: ViewPos::Last,
             last_update: UNIX_EPOCH,
+            chat_name,
         };
 
         // draw first frame
@@ -128,9 +131,8 @@ impl Display {
         let mut stdout = std::io::stdout();
         stdout.queue(cursor::MoveTo(0, 0))?;
 
-        let chat_name = "ChatName";  // TODO: get chat name in here
         let header_text = {
-            let title = format!("> PubliChat {chat_name} <");
+            let title = format!("> PubliChat: {} <", self.chat_name);
             let signs = "=".repeat((w as usize - title.len())/2);
             let extra = if ((w as usize - title.len()) & 1)==1 {"="} else {""};
             format!("{signs}{title}{signs}{extra}")
