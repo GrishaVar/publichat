@@ -183,7 +183,10 @@ impl<'a> Display<'a> {
 
     fn draw_messages(&mut self) -> crossterm::Result<()> {
         // SIDE EFFECT: DELETES FOOTER!!!
-        let state = self.state.lock().unwrap();  // TODO get rid of this unwrap!!!
+        let state = self.state.lock().map_err(|_| {
+            use std::io::{Error, ErrorKind::Other};
+            Error::new(Other, "Failed to lock state")
+        })?;
         if state.queue.is_empty() {return Ok(())}
 
         let mut stdout = std::io::stdout();
