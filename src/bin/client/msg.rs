@@ -106,7 +106,7 @@ impl Message {
         text: &str,
         chat_key: &HashBuf,
         pub_key: &HashBuf,
-    ) -> Result<cypher::Buf, ()> {
+    ) -> Result<cypher::Buf, &'static str> {
         let time: u64 = SystemTime::now()
             .duration_since(UNIX_EPOCH).expect("Woah, get with the times!")
             .as_millis().try_into().expect("Alright, futureboy");
@@ -114,7 +114,7 @@ impl Message {
         let mut res = cypher::DEFAULT;
         let (ck_buf, t_buf, pk_buf, msg_buf) = cypher::split_mut(&mut res);
         
-        if text.len() > msg_buf.len() - 1 { return Err(()) }  // msg too long
+        if text.len() > msg_buf.len() - 1 { return Err("Can't make cypher; msg too long") }
 
         // copy in basic data
         ck_buf.copy_from_slice(&chat_key[..ck_buf.len()]);

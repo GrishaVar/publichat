@@ -43,13 +43,16 @@ fn parse_header(header: &msg_head::Buf) -> Result<(u8, u32, u8, bool), &'static 
 }
 
 
+// Listener thread handles parsing data received from server
+// - Receive message packets; parse; break up into messages
+// - Insert into queue in correct place
 fn listener(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
     let mut hed_buf = msg_head::DEFAULT;
     loop {
         read_exact(&mut stream, &mut hed_buf, "Failed to read head buffer")?;
         // TODO: what should happen when this fails?
         // I guess thread closes and require reconnect
-        
+
         let (chat, first_id, count, forward) = parse_header(&hed_buf)?;
         if count == 0 { continue }  // skip no messages
 
@@ -102,25 +105,13 @@ fn listener(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
 }
 
 
-fn requester(
-    mut stream: TcpStream,
-    state: Arc<Mutex<GlobalState>>,
-    snd_rx: mpsc::Receiver<String>,
-    keypair: ed25519::Keypair,
-) -> Res {
+// Requester thread handles sending requests (fetch & query) to server
+fn requester(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
     let chat_id = state.lock().map_err(|_| "Failed to lock state")?.chat_id;
-    let chat_key = state.lock().map_err(|_| "Failed to lock state")?.chat_key;
-    let mut cypher_buf: CypherBuf;
-    let mut signature_buf: ed25519::SigBuf;
 
     // Fetch until we get first message packet
     while state.lock().map_err(|_| "Failed to lock state")?.queue.is_empty() {
         comm::send_fetch(&mut stream, &chat_id)?;
-        if let Ok(msg) = snd_rx.try_recv() {
-            cypher_buf = Message::make_cypher(&msg, &chat_key, keypair.public.as_bytes()).unwrap();  // TODO: unwrap
-            signature_buf = ed25519::sign(&cypher_buf, &keypair);
-            comm::send_msg(&mut stream, &chat_id, &cypher_buf, &signature_buf)?;
-        }
         thread::sleep(FQ_DELAY);
     }
 
@@ -131,16 +122,34 @@ fn requester(
             &chat_id,
             true,
             50,
-            state.lock().unwrap().max_id,
+            state.lock().unwrap().max_id,  // TODO: edit ID
         )?;
-        if let Ok(msg) = snd_rx.try_recv() {
-            cypher_buf = Message::make_cypher(&msg, &chat_key, keypair.public.as_bytes()).unwrap();  // TODO: unwrap
-            signature_buf = ed25519::sign(&cypher_buf, &keypair);
-            comm::send_msg(&mut stream, &chat_id, &cypher_buf, &signature_buf)?;
-        }
         thread::sleep(FQ_DELAY);
     }
 }
+
+
+// Sender threads sends messages to server as they come in from snd_rx
+fn sender(
+    mut stream: TcpStream,
+    state: Arc<Mutex<GlobalState>>,
+    snd_rx: mpsc::Receiver<String>,
+    keypair: ed25519::Keypair,
+) -> Res {
+    let chat_id = state.lock().map_err(|_| "Failed to lock state")?.chat_id;
+    let chat_key = state.lock().map_err(|_| "Failed to lock state")?.chat_key;
+
+    let mut cypher_buf: CypherBuf;
+    let mut signature_buf: ed25519::SigBuf;
+
+    loop {
+        let msg = snd_rx.recv().map_err(|_| "Message sender hung up")?;  // blocks
+        cypher_buf = Message::make_cypher(&msg, &chat_key, keypair.public.as_bytes())?;
+        signature_buf = ed25519::sign(&cypher_buf, &keypair);
+        comm::send_msg(&mut stream, &chat_id, &cypher_buf, &signature_buf)?;
+    }
+}
+
 
 fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
     eprintln!("Starting client...");
@@ -168,7 +177,7 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
     let queue = VecDeque::with_capacity(500);
     let state = GlobalState {
         queue,
-        chat_key,
+        chat_key,  // TODO: this doesn't change; store somewhere else?
         chat_id,
         min_id: 1,
         max_id: 0,
@@ -179,23 +188,35 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
     let (msg_tx, msg_rx) = mpsc::channel::<String>();
 
     // start listener thread
-    let stream2 = stream.try_clone()?;
-    let state2 = state.clone();
+    let stream_c = stream.try_clone()?;
+    let state_c = state.clone();
     eprintln!("Starting listener thread...");
     thread::spawn(|| {
-        match listener(stream2, state2) {
+        match listener(stream_c, state_c) {
             Ok(_) => eprintln!("Listener thread finished"),
             Err(e) => eprintln!("Listener thread crashed: {e}"),
         }
     });
 
     // start requester thread
-    let state3 = state.clone();
+    let stream_c = stream.try_clone()?;
+    let state_c = state.clone();
     eprintln!("Starting requester thread...");
     thread::spawn(|| {
-        match requester(stream, state3, msg_rx, keypair) {  // requester sends messages from tx to server
-            Ok(_) => eprintln!("Request loop finished"),
-            Err(e) => eprintln!("Request loop crashed: {e}"),
+        match requester(stream_c, state_c) {  // requester sends messages from tx to server
+            Ok(_) => eprintln!("Requester loop finished"),
+            Err(e) => eprintln!("Requester loop crashed: {e}"),
+        };
+    });
+
+    // start sender thread
+    let stream_c = stream.try_clone()?;
+    let state_c = state.clone();
+    eprintln!("Starting requester thread...");
+    thread::spawn(|| {
+        match sender(stream_c, state_c, msg_rx, keypair) {  // requester sends messages from tx to server
+            Ok(_) => eprintln!("Sender loop finished"),
+            Err(e) => eprintln!("Sender loop crashed: {e}"),
         };
     });
 
