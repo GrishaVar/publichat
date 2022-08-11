@@ -24,6 +24,9 @@ use crypt::{sha, ed25519};
 
 mod comm;
 
+// mutex lock shortuct
+macro_rules! lock { ($s:tt) => { $s.lock().map_err(|_| "Failed to lock state") } }
+
 fn parse_header(header: &msg_head::Buf) -> Result<(u8, u32, u8, bool), &'static str> {
     // returns (chat id byte, message id, message count, forward)
     let (pad_buf, cid_buf, mid_buf, count_buf) = msg_head::split(header);
@@ -60,7 +63,7 @@ fn listener(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
         let mut buf = vec![0; count as usize * msg_out::SIZE];  // TODO: consider array
         read_exact(&mut stream, &mut buf, "Failed to bulk read fetch")?;
 
-        let mut s = state.lock().map_err(|_| "Failed to lock state")?;
+        let mut s = lock!(state)?;
         if chat != s.chat_id[0] { continue }  // skip wrong chat
 
         let last_id = first_id + count as u32 - 1;  // inclusive. Can't undeflow
@@ -107,10 +110,10 @@ fn listener(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
 
 // Requester thread handles sending requests (fetch & query) to server
 fn requester(mut stream: TcpStream, state: Arc<Mutex<GlobalState>>) -> Res {
-    let chat_id = state.lock().map_err(|_| "Failed to lock state")?.chat_id;
+    let chat_id = lock!(state)?.chat_id;
 
     // Fetch until we get first message packet
-    while state.lock().map_err(|_| "Failed to lock state")?.queue.is_empty() {
+    while lock!(state)?.queue.is_empty() {
         comm::send_fetch(&mut stream, &chat_id)?;
         thread::sleep(FQ_DELAY);
     }
@@ -136,8 +139,8 @@ fn sender(
     snd_rx: mpsc::Receiver<String>,
     keypair: ed25519::Keypair,
 ) -> Res {
-    let chat_id = state.lock().map_err(|_| "Failed to lock state")?.chat_id;
-    let chat_key = state.lock().map_err(|_| "Failed to lock state")?.chat_key;
+    let chat_id = lock!(state)?.chat_id;
+    let chat_key = lock!(state)?.chat_key;
 
     let mut cypher_buf: CypherBuf;
     let mut signature_buf: ed25519::SigBuf;
