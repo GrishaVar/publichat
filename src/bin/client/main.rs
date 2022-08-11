@@ -144,6 +144,8 @@ fn sender(
 
     loop {
         let msg = snd_rx.recv().map_err(|_| "Message sender hung up")?;  // blocks
+        if msg.split_whitespace().next().is_none() { continue; }  // empty msg
+
         cypher_buf = Message::make_cypher(&msg, &chat_key, keypair.public.as_bytes())?;
         signature_buf = ed25519::sign(&cypher_buf, &keypair);
         comm::send_msg(&mut stream, &chat_id, &cypher_buf, &signature_buf)?;
