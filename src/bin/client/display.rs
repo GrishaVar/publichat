@@ -133,8 +133,9 @@ impl<'a> Display<'a> {
 
         let header_text = {
             let title = format!("> PubliChat: {} <", self.chat_name);
-            let signs = "=".repeat((w as usize - title.len())/2);
-            let extra = if ((w as usize - title.len()) & 1)==1 {"="} else {""};
+            let title_len = title.chars().count();
+            let signs = "=".repeat((w as usize - title_len)/2);
+            let extra = if ((w as usize - title_len) & 1)==1 {"="} else {""};
             format!("{signs}{title}{signs}{extra}")
         };
         let header = style(header_text)
@@ -144,8 +145,7 @@ impl<'a> Display<'a> {
 
         stdout.queue(PrintStyledContent(header))?;
 
-        let coloured_line = style(" ".repeat(w as usize))
-            .on(FG_COLOUR);
+        let coloured_line = style(" ".repeat(w as usize)).on(FG_COLOUR);
 
         stdout.queue(cursor::MoveToNextLine(1))?;
         stdout.queue(PrintStyledContent(coloured_line))?;
