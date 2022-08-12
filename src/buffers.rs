@@ -43,11 +43,12 @@ const fn pad_buf<const L: usize>(pad: [u8; PADDING_SIZE]) -> [u8; L] {
     // and END_PADDING at the end. This function is const!
     let mut buf = [0; L];
     let mut i = 0;
-    while { i += 1; i <= PADDING_SIZE } {  // for-loops aren't const :/
-        let j = i - 1;  // TODO: find a way to avoid this?
-        buf[j] = pad[j];
-        buf[buf.len() - PADDING_SIZE + j] = END_PADDING[j];
-    }
+    while {  // for-loops aren't const :/
+        buf[i] = pad[i];
+        buf[buf.len() - PADDING_SIZE + i] = END_PADDING[i];
+        i += 1;
+        i < PADDING_SIZE
+    } {}
     buf
 }
 macro_rules! prepad {  // apply pad_buf
