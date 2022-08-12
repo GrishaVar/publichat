@@ -288,7 +288,7 @@ main = function() {
     var public_key = decrypted_bytes.splice(0, 32); // 32 bytes
     var padded_bytes = decrypted_bytes.splice(0, message_content_length);// 396
     // username string
-    var username_colour = aesjs.utils.hex.fromBytes(public_key).slice(26, 32);
+    var username_colour = aesjs.utils.hex.fromBytes(public_key.slice(29, 32));
     var username_str = btoa(String.fromCharCode(...public_key));
     // date string
     var date = new Date(Number(server_time));
