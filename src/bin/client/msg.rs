@@ -86,8 +86,11 @@ impl Message {
             format!("{hour}:{min}:{sec}")
         };
 
-        // prep message string
+        // prep message string: check utf8 and sanitise for ansi
         let msg = str::from_utf8(message).map_err(|_| "Non-utf8 message!")?;
+        let msg = msg.chars()
+            .map(|c| if c.is_ascii_control() {'�'} else {c})
+            .collect::<String>();
 
         // build string
         let cached_str_repr = format!("{v_mark} {user_c} {time_s} {msg}");
