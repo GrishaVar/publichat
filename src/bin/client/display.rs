@@ -154,30 +154,42 @@ impl<'a> Display<'a> {
     }
 
     fn draw_footer(&mut self) -> crossterm::Result<()> {
-        // TODO: account for max msg length! here or there?
+        // TODO: notify when message too long
         let mut stdout = std::io::stdout();
         let (w, h) = terminal::size()?;
+        let max_text_len = w as usize - 2;
 
         // draw purple separator
-        stdout.queue(cursor::MoveTo(0, h-2))?;
-        stdout.queue(PrintStyledContent(style(" ".repeat(w as usize)).on(FG_COLOUR)))?;
+        stdout.queue(cursor::MoveTo(0, h - 2))?;
+        stdout.queue(PrintStyledContent(
+            style(" ".repeat(w as usize)).on(FG_COLOUR)
+        ))?;
 
         // draw current input text
         stdout.queue(cursor::MoveToNextLine(1))?;
         stdout.queue(terminal::Clear(ClearType::CurrentLine))?;  // del line only
-        let blinker = style("> ")
-            .bold()
-            .rapid_blink()
-            .with(FG_COLOUR)
-            .on(BG_COLOUR);
-        stdout.queue(PrintStyledContent(blinker))?;
-        let text = style(&self.user_msg)
-            .with(FG_COLOUR)
-            .on(BG_COLOUR);
-        stdout.queue(PrintStyledContent(text))?;
-        let spaces = style(" ".repeat(w as usize - 2 - self.user_msg.len()))
-            .on(BG_COLOUR);
-        stdout.queue(PrintStyledContent(spaces))?;
+
+        // print blinker
+        stdout.queue(PrintStyledContent(
+            style("> ").bold().rapid_blink().with(FG_COLOUR).on(BG_COLOUR)
+        ))?;
+
+        // print user's typed message
+        let vis_text = match self.user_msg.char_indices().rev().nth(max_text_len - 1) {
+            // slice of last max_text_len charachters of typed message
+            None => self.user_msg.as_str(),  // shorter than max => show whole
+            Some((i, _)) => &self.user_msg[i..],
+        };
+        stdout.queue(PrintStyledContent(
+            style(vis_text).with(FG_COLOUR).on(BG_COLOUR)
+        ))?;
+        if vis_text.len() == self.user_msg.len() {
+            // vis and text have same length => text wasn't shortened
+            let spaces_len = max_text_len - self.user_msg.chars().count();
+            stdout.queue(PrintStyledContent(
+                style(" ".repeat(spaces_len)).on(BG_COLOUR)
+            ))?;
+        }
         stdout.flush()
     }
 
