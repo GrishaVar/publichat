@@ -2,8 +2,7 @@ use std::io::{Seek, SeekFrom, BufReader, Write};
 use std::path::Path;
 use std::fs::OpenOptions;
 
-use crate::constants::*;
-use crate::helpers::{Res, read_exact};
+use publichat::{constants::*, helpers::*};
 
 const MSG_ST_SIZE_U32: u32 = MSG_ST_SIZE as u32;
 const MSG_ST_SIZE_U64: u64 = MSG_ST_SIZE as u64;

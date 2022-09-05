@@ -26,8 +26,8 @@ Send message to client:
 
 pub const PADDING_SIZE: usize = 3;
 pub const SIGNATURE_SIZE: usize = 64;
-pub const CHAT_ID_SIZE: usize = 32;
-pub const CYPHER_SIZE: usize = 440;  // see very pretty diagram below (line 7)
+pub const HASH_SIZE: usize = 32;
+pub const CHAT_ID_SIZE: usize = HASH_SIZE;  // chat ID is a hash
 pub const QUERY_ARG_SIZE: usize = std::mem::size_of::<u32>();
 pub const TIME_SIZE: usize = std::mem::size_of::<u64>();
 pub const MSG_ID_SIZE: usize = QUERY_ARG_SIZE - 1;
@@ -36,10 +36,7 @@ pub const MSG_ID_SIZE: usize = QUERY_ARG_SIZE - 1;
 pub const MAX_FETCH_AMOUNT: u8 = 50;
 pub const DEFAULT_FETCH_AMOUNT: u8 = 25;
 
-pub type Hash       = [u8; CHAT_ID_SIZE];
-pub type Cypher     = [u8; CYPHER_SIZE];
-pub type Signature  = [u8; SIGNATURE_SIZE];
-pub type MsgData    = [u8; CYPHER_SIZE + SIGNATURE_SIZE];
+pub type Hash       = [u8; HASH_SIZE];
 
 pub type MessageIn  = [u8; MSG_IN_SIZE];
 pub type MessageSt  = [u8; MSG_ST_SIZE];
@@ -90,4 +87,15 @@ pub const FCH_SIZE: usize           = FCH_CHAT_ID + CHAT_ID_SIZE;
 pub const QRY_CHAT_ID: usize        = 0;
 pub const QRY_ARGS: usize           = QRY_CHAT_ID + CHAT_ID_SIZE;  // direction and amount
 pub const QRY_MSG_ID: usize         = QRY_ARGS + 1;  // 3 bytes msg ID (ARGS is 1 byte)
-pub const QRY_SIZE: usize           = QRY_MSG_ID;
+pub const QRY_SIZE: usize           = QRY_MSG_ID + MSG_ID_SIZE;
+
+
+// CLIENT-SIDE: CYPHER CONTENTS
+pub const CYPHER_CHAT_KEY_SIZE: usize   = 4;
+pub const CYPHER_PAD_MSG_SIZE: usize    = 396;  // picked for STORAGE_SIZE = 512
+
+pub const CYPHER_CHAT_KEY: usize        = 0;
+pub const CYPHER_TIME: usize            = CYPHER_CHAT_KEY + CYPHER_CHAT_KEY_SIZE;
+pub const CYPHER_PUB_KEY: usize         = CYPHER_TIME + TIME_SIZE;
+pub const CYPHER_PAD_MSG: usize         = CYPHER_PUB_KEY + HASH_SIZE;
+pub const CYPHER_SIZE: usize            = CYPHER_PAD_MSG + CYPHER_PAD_MSG_SIZE;
