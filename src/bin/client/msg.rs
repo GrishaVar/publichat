@@ -76,14 +76,13 @@ impl Message {
 
         // prep time string
         let time = Duration::from_millis(server_time);
-        let time_s = {  // TODO: use date/time-related crate (?)
+        let (hour, min, sec) = {  // TODO: use date/time-related crate (?)
             let time_sec = time.as_secs();
-
-            let hour = (time_sec / 3600) % 24;
-            let min = (time_sec / 60) % 60;
-            let sec = time_sec % 60;
-
-            format!("{hour}:{min}:{sec}")
+            (
+                (time_sec / 3600) % 24,
+                (time_sec / 60) % 60,
+                time_sec % 60,
+            )
         };
 
         // prep message string: check utf8 and sanitise for ansi
@@ -93,7 +92,9 @@ impl Message {
             .collect::<String>();
 
         // build string
-        let cached_str_repr = format!("{v_mark} {user_c} {time_s} {msg}");
+        let cached_str_repr = format!(
+            "{v_mark} {user_c} {hour:0>2}:{min:0>2}:{sec:0>2} {msg}"
+        );
 
         Ok(Self {
             // time,

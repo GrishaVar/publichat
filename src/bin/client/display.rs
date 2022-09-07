@@ -126,18 +126,15 @@ impl<'a> Display<'a> {
     }
 
     fn draw_header(&mut self) -> crossterm::Result<()> {
-        let (w, _h) = self.size;
+        let w = self.size.0 as usize;
 
         let mut stdout = std::io::stdout();
         stdout.queue(cursor::MoveTo(0, 0))?;
 
-        let header_text = {
-            let title = format!("> PubliChat: {} <", self.chat_name);
-            let title_len = title.chars().count();
-            let signs = "=".repeat((w as usize - title_len)/2);
-            let extra = if ((w as usize - title_len) & 1)==1 {"="} else {""};
-            format!("{signs}{title}{signs}{extra}")
-        };
+        let header_text = format!(  // TODO: cache with each size change?
+            "{:=^w$}",  // fill with '=' to `w` length, centre-aligned
+            format!("> PubliChat: {} <", self.chat_name),
+        );
         let header = style(header_text)
             .with(FG_COLOUR)
             .on(BG_COLOUR)
@@ -145,7 +142,7 @@ impl<'a> Display<'a> {
 
         stdout.queue(PrintStyledContent(header))?;
 
-        let coloured_line = style(" ".repeat(w as usize)).on(FG_COLOUR);
+        let coloured_line = style(" ".repeat(w)).on(FG_COLOUR);
 
         stdout.queue(cursor::MoveToNextLine(1))?;
         stdout.queue(PrintStyledContent(coloured_line))?;
