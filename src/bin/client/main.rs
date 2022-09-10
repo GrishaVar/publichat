@@ -8,7 +8,11 @@ use std::thread;
 use std::mem;
 
 use publichat::helpers::*;
-use publichat::buffers::{msg_head, msg_out, cypher::Buf as CypherBuf};
+use publichat::buffers::{
+    msg_head,
+    msg_out_c as msg_out,
+    cypher::Buf as CypherBuf,
+};
 
 mod msg;
 use msg::Message;

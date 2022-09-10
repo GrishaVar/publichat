@@ -4,7 +4,7 @@ use publichat::helpers::*;
 use publichat::buffers::{
     cypher::Buf as CypherBuf,
     hash::Buf as HashBuf,
-    msg_in,
+    msg_in_c as msg_in,
     fetch,
     query,
 };

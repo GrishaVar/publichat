@@ -2,17 +2,24 @@ use std::io::{Seek, SeekFrom, BufReader, Write};
 use std::path::Path;
 use std::fs::OpenOptions;
 
-use publichat::{constants::*, helpers::*};
+use publichat::helpers::*;
+use publichat::buffers::msg_out_s::{
+    Buf as MsgBuf,
+    SIZE as MSG_SIZE,
+};
 
-const MSG_ST_SIZE_U32: u32 = MSG_ST_SIZE as u32;
-const MSG_ST_SIZE_U64: u64 = MSG_ST_SIZE as u64;
-const NEG_MSG_ST_SIZE: i64 = -(MSG_ST_SIZE as i64);
+const MSG_SIZE_U32: u32 = MSG_SIZE as u32;
+const MSG_SIZE_U64: u64 = MSG_SIZE as u64;
+const NEG_MSG_SIZE: i64 = -(MSG_SIZE as i64);
 // naming vars after their types is bad, but this makes life much easier later.
 
 const EMPTY_RESPONSE: (u8, u32, Vec<u8>) = (0, 0, Vec::new());  // doesn't allocate
-const MAX_FILE_SIZE: u64 = u32::MAX as u64 * MSG_ST_SIZE_U64;  // approx 700 GB
+const MAX_FILE_SIZE: u64 = u32::MAX as u64 * MSG_SIZE_U64;  // approx 700 GB
 
-pub fn push(path: &Path, msg: &[u8; MSG_ST_SIZE]) -> Res {
+pub const MAX_FETCH_AMOUNT: u8 = 50;
+pub const DEFAULT_FETCH_AMOUNT: u8 = 25;
+
+pub fn push(path: &Path, msg: &MsgBuf) -> Res {
     let mut file = OpenOptions::new()
         .append(true)  // no reading or writing, only append
         .create(true)  // create file if it doesn't already exist
@@ -32,9 +39,9 @@ pub fn fetch(
         _ => return Ok(EMPTY_RESPONSE),  // no file => no contents
     };
 
-    if file.seek(SeekFrom::End(i64::from(count) * NEG_MSG_ST_SIZE)).is_err() {
+    if file.seek(SeekFrom::End(i64::from(count) * NEG_MSG_SIZE)).is_err() {
         count = (file.seek(SeekFrom::End(0))
-            .map_err(|_| "Failed to seek from end")? / MSG_ST_SIZE_U64)
+            .map_err(|_| "Failed to seek from end")? / MSG_SIZE_U64)
             .try_into().map_err(|_| "Stream position > 255")?;
 
         file.seek(SeekFrom::Start(0))
@@ -44,11 +51,11 @@ pub fn fetch(
     let pos = file.stream_position().map_err(|_| "Failed to read stream pos")?;
     if pos > MAX_FILE_SIZE { return Err("Too many messages in one file!") }
 
-    let id = u32::try_from(pos / MSG_ST_SIZE_U64).unwrap();  // can't fail
-    if pos != (id * MSG_ST_SIZE_U32).into() { return Err("File corruption") }
+    let id = u32::try_from(pos / MSG_SIZE_U64).unwrap();  // can't fail
+    if pos != (id * MSG_SIZE_U32).into() { return Err("File corruption") }
 
     let mut file = BufReader::new(file);
-    let mut res = vec![0; count as usize * MSG_ST_SIZE];
+    let mut res = vec![0; count as usize * MSG_SIZE];
 
     read_exact(&mut file, &mut res, "Failed to read from db (fetch)")?;
     Ok((count, id, res))
@@ -71,8 +78,8 @@ pub fn query(
     };
 
     let db_size = file.metadata().map_err(|_| "Failed to get metadata")?.len() as u32;
-    let db_len  = db_size / MSG_ST_SIZE_U32;
-    assert_eq!(db_len * MSG_ST_SIZE_U32, db_size);  // todo: remove?
+    let db_len  = db_size / MSG_SIZE_U32;
+    assert_eq!(db_len * MSG_SIZE_U32, db_size);  // todo: remove?
 
     if id > db_len {return Ok(EMPTY_RESPONSE)} // outside of range, return nothing
     if forward && id >= db_len-1 {return Ok(EMPTY_RESPONSE)}  // nothing ahead of db_len
@@ -86,10 +93,10 @@ pub fn query(
         }
     };
 
-    file.seek(SeekFrom::Start(start as u64 * MSG_ST_SIZE_U64))
+    file.seek(SeekFrom::Start(start as u64 * MSG_SIZE_U64))
         .map_err(|_| "Failed to seek")?;
     let mut file = BufReader::new(file);
-    let mut res = vec![0; len as usize * MSG_ST_SIZE];
+    let mut res = vec![0; len as usize * MSG_SIZE];
 
     read_exact(&mut file, &mut res, "Failed to read from db (query)")?;
     Ok((len, start, res))

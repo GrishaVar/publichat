@@ -37,7 +37,7 @@ macro_rules! build_buf {
     };
 }
 
-use crate::constants::{PADDING_SIZE, END_PADDING}; 
+use crate::constants::PADDING_SIZE;
 const fn pad_buf<const L: usize>(pad: [u8; PADDING_SIZE]) -> [u8; L] {
     // Create an empty buffer, put pad in the beginning
     // and END_PADDING at the end. This function is const!
@@ -45,7 +45,7 @@ const fn pad_buf<const L: usize>(pad: [u8; PADDING_SIZE]) -> [u8; L] {
     let mut i = 0;
     while {  // for-loops aren't const :/
         buf[i] = pad[i];
-        buf[buf.len() - PADDING_SIZE + i] = END_PADDING[i];
+        buf[buf.len() - PADDING_SIZE + i] = pad::END_PADDING[i];
         i += 1;
         i < PADDING_SIZE
     } {}
@@ -53,6 +53,7 @@ const fn pad_buf<const L: usize>(pad: [u8; PADDING_SIZE]) -> [u8; L] {
 }
 macro_rules! prepad {  // apply pad_buf
     ($pad:expr) => {
+        use super::pad;
         pub type PadBuf = [u8; SIZE + 2*PADDING_SIZE];
         pub const PREPAD: PadBuf = super::pad_buf($pad);
         pub fn pad_split(buf: &PadBuf) -> NTuple {
@@ -64,27 +65,38 @@ macro_rules! prepad {  // apply pad_buf
     };
 }
 
-// server-side
-// TODO: use in server code
-// TODO: combine cypher and sig into one block? Server doesn't need them separately
-build_buf!(msg_st; TIME_SIZE, CYPHER_SIZE, SIGNATURE_SIZE);
-
-// server -> client
-build_buf!(msg_head; PADDING_SIZE, 1, MSG_ID_SIZE, 1;
-    pub use crate::constants::MSG_PADDING as PAD;  // includes padding
-);
-build_buf!(msg_out; TIME_SIZE, CYPHER_SIZE, SIGNATURE_SIZE);
-
-// client -> server
-build_buf!(fetch; CHAT_ID_SIZE; prepad!(FETCH_PADDING););
-build_buf!(query; CHAT_ID_SIZE, 1, MSG_ID_SIZE; prepad!(QUERY_PADDING););
-build_buf!(msg_in; CHAT_ID_SIZE, CYPHER_SIZE, SIGNATURE_SIZE; prepad!(SEND_PADDING););
-
-// client-side
-build_buf!(cypher; CYPHER_CHAT_KEY_SIZE, TIME_SIZE, HASH_SIZE, CYPHER_PAD_MSG_SIZE);
+// ACTUAL DEFINITIONS:
 
 // misc
 // splitting not needed, make for consistency
-// TODO: optionally skip functions?
 build_buf!(hash; HASH_SIZE);
 build_buf!(signature; SIGNATURE_SIZE);
+build_buf!(qry_arg; QUERY_ARG_SIZE);
+build_buf!(pad; PADDING_SIZE;
+    // server -> client
+    pub const SEND_PADDING:  [u8; PADDING_SIZE] = *b"snd";
+    pub const FETCH_PADDING: [u8; PADDING_SIZE] = *b"fch";
+    pub const QUERY_PADDING: [u8; PADDING_SIZE] = *b"qry";
+    pub const END_PADDING:   [u8; PADDING_SIZE] = *b"end";
+
+    // client -> server
+    pub const MSG_PADDING:   [u8; PADDING_SIZE] = *b"msg";
+);
+
+// server -> client
+build_buf!(msg_head; PADDING_SIZE, 1, MSG_ID_SIZE, 1;
+    pub use super::pad::MSG_PADDING as PAD;  // includes padding
+);
+build_buf!(msg_out_c; TIME_SIZE, CYPHER_SIZE, SIGNATURE_SIZE);
+build_buf!(msg_out_s; TIME_SIZE, CYPHER_SIZE + SIGNATURE_SIZE);
+    // same size as msg_out, but combines cypher with signature
+    // because server doesn't need the distinction.
+
+// client -> server
+build_buf!(fetch; CHAT_ID_SIZE; prepad!(pad::FETCH_PADDING););
+build_buf!(query; CHAT_ID_SIZE, 1, MSG_ID_SIZE; prepad!(pad::QUERY_PADDING););
+build_buf!(msg_in_c; CHAT_ID_SIZE, CYPHER_SIZE, SIGNATURE_SIZE; prepad!(pad::SEND_PADDING););
+build_buf!(msg_in_s; CHAT_ID_SIZE, CYPHER_SIZE + SIGNATURE_SIZE);
+
+// client-side
+build_buf!(cypher; CYPHER_CHAT_KEY_SIZE, TIME_SIZE, HASH_SIZE, CYPHER_PAD_MSG_SIZE);

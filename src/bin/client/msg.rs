@@ -3,7 +3,7 @@ use std::{str, fmt, time::{Duration, SystemTime, UNIX_EPOCH}};
 use crossterm::style::{Stylize, Color};
 use rand::Rng;
 
-use publichat::buffers::{hash::Buf as HashBuf, cypher, msg_out};
+use publichat::buffers::{hash::Buf as HashBuf, cypher, msg_out_c as msg_out};
 use crate::crypt::*;
 use crate::common::{
     VERIFY_TOLERANCE_MS,
