@@ -101,8 +101,8 @@ impl<'a> Display<'a> {
             // update at defined FPS when a new message comes in.
             match event::poll(_DISP_DELAY) {
                 Ok(true) => match event::read()? {
-                    Key(KeyEvent{code: Char('c'), modifiers: Mod::CONTROL }) => break Ok(()),
-                    Key(KeyEvent{code: Esc, modifiers: Mod::NONE }) => break Ok(()),
+                    Key(KeyEvent{code: Char('c'), modifiers: Mod::CONTROL, .. }) => break Ok(()),
+                    Key(KeyEvent{code: Esc, modifiers: Mod::NONE, .. }) => break Ok(()),
                     Key(e) => self.handle_keyboard_event(e)?,
                     Mouse(e) => self.handle_mouse_event(e)?,
                     Resize(x, y) => {
@@ -110,6 +110,10 @@ impl<'a> Display<'a> {
                         self.size = (x, y);
                         self.refresh()?;
                     },
+                    FocusGained => {},  // TODO
+                    FocusLost => {},  // TODO
+                    Paste(_) => {},  // TODO
+                    
                 },
                 Ok(false) => {},  // No events to be processed
                 Err(e) => break Err(e),  // Failed to read, clean up and exit

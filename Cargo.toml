@@ -10,7 +10,7 @@ base64 = "0.13.0"
 ctr = "0.9.1"
 sha1_smol = "1.0.0"
 sha3 = "0.10.1"
-crossterm = "0.23.2"  # TODO: optional for client only?
+crossterm = "0.25"  # TODO: optional for client only?
 rand = "0.8.5"  # TODO: this too
 ed25519-dalek = "1.0.1"
 
