@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{self, Write};
 use std::time::{self, SystemTime, UNIX_EPOCH};
 use std::sync::{Arc, Mutex, mpsc};
 use std::mem;

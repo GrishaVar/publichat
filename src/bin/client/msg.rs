@@ -96,13 +96,15 @@ impl Message {
             "{v_mark} {user_c} {hour:0>2}:{min:0>2}:{sec:0>2} {msg}"
         );
 
+        const PREFIX_LEN: u16 = 1 + 1 + USER_ID_CHAR_COUNT as u16 + 1 + 8 + 1;
+
         Ok(Self {
             // time,
             // user,
             // text: cypher,
             // verified,
             // length,
-            len: cached_str_repr.chars().count() as u16,
+            len: PREFIX_LEN + msg.chars().count() as u16,
             repr: cached_str_repr,
         })
     }
