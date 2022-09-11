@@ -30,6 +30,11 @@ use crate::common::*;
 const BG_COLOUR: Color = Color::Rgb{r: 0xd0, g: 0xd0, b: 0xd0};
 const FG_COLOUR: Color = Color::Rgb{r: 0x66, g: 0x00, b: 0x33};
 
+const HEADER_HEIGHT: u16 = 2;
+const FOOTER_HEIGHT: u16 = 2;
+const MIN_HEIGHT: u16 = HEADER_HEIGHT + 1 + FOOTER_HEIGHT;
+const MIN_WIDTH: u16 = 25;
+
 enum ViewPos {
     Last,  // "most recent message on bottom"
     Index{msg_id: u16, chr_id: u8},  // id of TOP message, index of its first char
@@ -75,11 +80,10 @@ impl<'a> Display<'a> {
             chat_name,
         };
 
-        // draw first frame
-        disp.refresh()?;
-
-        // enter mainloop
-        disp.mainloop()?;
+        // draw first frame then start mainloop
+        // preserve errors for returning, but don't return yet
+        // (cleanup will still be needed)
+        let res = disp.refresh().and(disp.mainloop());
 
         // clean up
         stdout.queue(cursor::Show)?;
@@ -89,7 +93,8 @@ impl<'a> Display<'a> {
         stdout.queue(event::DisableMouseCapture)?;
         stdout.flush()?;
         terminal::disable_raw_mode()?;
-        Ok(())
+
+        res
     }
 
     fn mainloop(&mut self) -> crossterm::Result<()> {
@@ -107,6 +112,12 @@ impl<'a> Display<'a> {
                     Mouse(e) => self.handle_mouse_event(e)?,
                     Resize(x, y) => {
                         // I test this a lot but actually it should be a rare event
+                        if x < MIN_WIDTH || y < MIN_HEIGHT {
+                            break Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                "Terminal size not supported! Too small :(",
+                            ))
+                        }
                         self.size = (x, y);
                         self.refresh()?;
                     },
@@ -205,7 +216,7 @@ impl<'a> Display<'a> {
         let mut stdout = std::io::stdout();
 
         let (w, h) = self.size;
-        let mut remaining_lines = h - 4;  // two lines used on top, two on bottom
+        let mut remaining_lines = h - (HEADER_HEIGHT + FOOTER_HEIGHT);
 
         // TODO: find a way of changing backgroud nicely
         // stdout.queue(SetForegroundColor(Color::Black))?;
