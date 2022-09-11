@@ -16,7 +16,7 @@ pub struct Message {
     // user: Hash,
     // text: Contents,
     // verified: bool,
-    // pub length: u8,
+    pub len: u16,
     pub repr: String,  // TODO: duplicate storage?
     // TODO: consider just having strings instead of this struct
     // TODO: what do I do when the time needs to be displayed differently?
@@ -102,6 +102,7 @@ impl Message {
             // text: cypher,
             // verified,
             // length,
+            len: cached_str_repr.chars().count() as u16,
             repr: cached_str_repr,
         })
     }

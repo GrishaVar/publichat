@@ -218,7 +218,7 @@ impl<'a> Display<'a> {
         if state.queue.len() <= remaining_lines as usize &&
             // it's possible all messages fit on the screen
             // do more expensive check to see if it's true
-            state.queue.iter().map(|m| 1+(m.repr.len() as u16 / w)).sum::<u16>() < h
+            state.queue.iter().map(|m| 1+(m.len / w)).sum::<u16>() < h
         {
             // if it is true, just print with no checks
             for msg in state.queue.iter() {
@@ -235,7 +235,7 @@ impl<'a> Display<'a> {
                 for msg in state.queue.range(1+usize::from(msg_id)..) {
                     if remaining_lines == 0 { break }
 
-                    let line_count = (msg.repr.len() as u16 / w) + 1;
+                    let line_count = (msg.len / w) + 1;
                     if let Some(res) = remaining_lines.checked_sub(line_count) {
                         // normal situation, whole message fits on screen
                         write!(stdout, "{msg}\r\n")?;
@@ -252,7 +252,7 @@ impl<'a> Display<'a> {
                 stdout.queue(cursor::MoveTo(0, h-2))?;
                 for msg in state.queue.iter().rev() {
                     if remaining_lines == 0 { break }
-                    let msg_height = (msg.repr.len() as u16 / w) + 1;
+                    let msg_height = (msg.len / w) + 1;
                     if msg_height <= remaining_lines {  // message fits no problemo
                         stdout.queue(cursor::MoveToPreviousLine(msg_height))?;
                         write!(stdout, "{msg}")?;
