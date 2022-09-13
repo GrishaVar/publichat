@@ -66,6 +66,7 @@ impl<'a> Display<'a> {
         stdout.queue(terminal::Clear(ClearType::All))?;
         stdout.queue(cursor::DisableBlinking)?;
         stdout.queue(cursor::Hide)?;
+        stdout.queue(terminal::SetTitle("PubliChat"))?;
         stdout.flush()?;
 
         // set up struct
@@ -146,10 +147,9 @@ impl<'a> Display<'a> {
         let mut stdout = std::io::stdout();
         stdout.queue(cursor::MoveTo(0, 0))?;
 
-        let header_text = format!(  // TODO: cache with each size change?
-            "{:=^w$}",  // fill with '=' to `w` length, centre-aligned
-            format!("> PubliChat: {} <", self.chat_name),
-        );
+        // TODO: cache with each size change?
+        // TODO: make hidable?
+        let header_text = format!("{:^w$}", self.chat_name);
         let header = style(header_text)
             .with(FG_COLOUR)
             .on(BG_COLOUR)
