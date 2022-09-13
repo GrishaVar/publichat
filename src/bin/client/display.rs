@@ -314,13 +314,26 @@ impl<'a> Display<'a> {
                 self.user_msg.pop();
                 self.draw_footer()
             },
+            (Mod::CONTROL, Backspace) | (Mod::CONTROL, Char('h')) => {
+                // remove word
+                let pos = self.user_msg
+                    .trim_end()
+                    .trim_end_matches(|c: char|
+                        !c.is_whitespace()
+                        && !c.is_ascii_punctuation()
+                    )
+                    .trim_end()
+                    .len();
+
+                self.user_msg.truncate(pos);
+                self.draw_footer()
+            }
             (Mod::NONE, Enter) => {  // send message
                 use std::io::{Error, ErrorKind::Other};
                 self.msg_tx.send(mem::take(&mut self.user_msg))
                     .map_err(|_| Error::new(Other, "msg_rx closed"))?;
                 self.draw_footer()
             },
-            // (Mod::CONTROL, Backspace) => Ok(()),  // remove word
             // (Mod::NONE, Delete) => Ok(()),  // remove char
             // (Mod::CONTROL, Delete) => Ok(()),  // remove word
             (Mod::NONE, Up) => {  // scroll up
