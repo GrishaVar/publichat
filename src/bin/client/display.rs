@@ -222,14 +222,17 @@ impl<'a> Display<'a> {
         // stdout.queue(SetForegroundColor(Color::Black))?;
         // stdout.queue(SetBackgroundColor(Color::Grey))?;
 
+        // TODO: this can just be u16::div_ceil once that stabilises. rust#88581
+        let req_lines = |len| if len % w > 0 { len / w + 1 } else { len / w };
+
         // clear current screen  (THIS DELETES FOOTER!)
-        stdout.queue(cursor::MoveTo(0, 2))?;  // TODO: terminal too small?
+        stdout.queue(cursor::MoveTo(0, HEADER_HEIGHT))?;  // TODO: terminal too small?
         stdout.queue(terminal::Clear(ClearType::FromCursorDown))?;
 
         if state.queue.len() <= remaining_lines as usize &&
             // it's possible all messages fit on the screen
             // do more expensive check to see if it's true
-            state.queue.iter().map(|m| 1+(m.len / w)).sum::<u16>() < h
+            state.queue.iter().map(|m| req_lines(m.len)).sum::<u16>() <= remaining_lines
         {
             // if it is true, just print with no checks
             for msg in state.queue.iter() {
@@ -237,7 +240,7 @@ impl<'a> Display<'a> {
             }
             return stdout.flush();
         }
-        
+
         // Not all messages fit on screen
         match self.view {
             ViewPos::Index { msg_id, .. } => {  // TODO: use chr_id
@@ -246,7 +249,7 @@ impl<'a> Display<'a> {
                 for msg in state.queue.range(1+usize::from(msg_id)..) {
                     if remaining_lines == 0 { break }
 
-                    let line_count = (msg.len / w) + 1;
+                    let line_count = req_lines(msg.len);
                     if let Some(res) = remaining_lines.checked_sub(line_count) {
                         // normal situation, whole message fits on screen
                         write!(stdout, "{msg}\r\n")?;
@@ -260,20 +263,29 @@ impl<'a> Display<'a> {
             }
             ViewPos::Last => {
                 // draw from bottom up
-                stdout.queue(cursor::MoveTo(0, h-2))?;
+                // last message shown in full, but top message might be cut off
+                stdout.queue(cursor::MoveTo(0, h - FOOTER_HEIGHT))?;
                 for msg in state.queue.iter().rev() {
-                    if remaining_lines == 0 { break }
-                    let msg_height = (msg.len / w) + 1;
-                    if msg_height <= remaining_lines {  // message fits no problemo
+                    let msg_height = req_lines(msg.len);
+                    if msg_height <= remaining_lines {
+                        // message fits no problemo. Move up to fit it:
                         stdout.queue(cursor::MoveToPreviousLine(msg_height))?;
+
+                        // print, then return to starting point:
+                        stdout.queue(cursor::SavePosition)?;
                         write!(stdout, "{msg}")?;
+                        stdout.queue(cursor::RestorePosition)?;
+
                         remaining_lines -= msg_height;
-                    } else {  // only bottom half of top msg fits
-                        // stdout.queue(cursor::MoveToPreviousLine(remaining_lines))?;
-                        
-                        stdout.queue(cursor::MoveTo(0, 2))?;
+                        if remaining_lines == 0 { break }
+                    } else {
+                        // only bottom half of top msg fits
+                        // note: the message prefix will NOT be visible
+                        stdout.queue(cursor::MoveTo(0, HEADER_HEIGHT))?;
                         let skipped_lines = msg_height - remaining_lines;
-                        write!(stdout, "{}", &msg.repr[(w*skipped_lines) as usize..])?;
+
+                        // TODO: think about dealing with unicode graphemes
+                        // write!(stdout, "{}", &msg.repr[(w*skipped_lines) as usize..])?;
                         break;  // finished drawing
                     }
                 }
