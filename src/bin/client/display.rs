@@ -16,14 +16,8 @@ use crossterm::style::{
 use crossterm::terminal::{
     self,
     ClearType,
-    EnterAlternateScreen,
-    LeaveAlternateScreen,
 };
-use crossterm::event::{
-    self,
-    KeyEvent,
-    MouseEvent,
-};
+use crossterm::event;
 
 use crate::common::*;
 
@@ -62,7 +56,7 @@ impl<'a> Display<'a> {
         let mut stdout = std::io::stdout();
         terminal::enable_raw_mode()?;
         stdout.queue(event::EnableMouseCapture)?;
-        stdout.queue(EnterAlternateScreen)?;
+        stdout.queue(terminal::EnterAlternateScreen)?;
         stdout.queue(terminal::Clear(ClearType::All))?;
         stdout.queue(cursor::DisableBlinking)?;
         stdout.queue(cursor::Hide)?;
@@ -89,7 +83,7 @@ impl<'a> Display<'a> {
         // clean up
         stdout.queue(cursor::Show)?;
         stdout.queue(cursor::EnableBlinking)?;
-        stdout.queue(LeaveAlternateScreen)?;
+        stdout.queue(terminal::LeaveAlternateScreen)?;
         stdout.queue(SetAttribute(Attribute::Reset))?;
         stdout.queue(event::DisableMouseCapture)?;
         stdout.flush()?;
@@ -100,6 +94,7 @@ impl<'a> Display<'a> {
 
     fn mainloop(&mut self) -> crossterm::Result<()> {
         use crossterm::event::Event::*;
+        use crossterm::event::KeyEvent as KE;
         use crossterm::event::KeyCode::{Char, Esc};
         use crossterm::event::KeyModifiers as Mod;
         loop {
@@ -107,15 +102,16 @@ impl<'a> Display<'a> {
             // update at defined FPS when a new message comes in.
             match event::poll(_DISP_DELAY) {
                 Ok(true) => match event::read()? {
-                    Key(KeyEvent{code: Char('c'), modifiers: Mod::CONTROL, .. }) => break Ok(()),
-                    Key(KeyEvent{code: Esc, modifiers: Mod::NONE, .. }) => break Ok(()),
+                    Key(KE{code: Char('c'), modifiers: Mod::CONTROL, .. }) => break Ok(()),
+                    Key(KE{code: Char('d'), modifiers: Mod::CONTROL, .. }) => break Ok(()),
+                    Key(KE{code: Char('z'), modifiers: Mod::CONTROL, .. }) => break Ok(()),
+                    Key(KE{code: Esc,       modifiers: Mod::NONE,    .. }) => break Ok(()),
                     Key(e) => self.handle_keyboard_event(e)?,
                     Mouse(e) => self.handle_mouse_event(e)?,
                     Resize(x, y) => self.handle_resize(x, y)?,
+                    Paste(s) => self.handle_paste(s)?,
                     FocusGained => {},  // TODO
                     FocusLost => {},  // TODO
-                    Paste(_) => {},  // TODO
-
                 },
                 Ok(false) => {},  // No events to be processed
                 Err(e) => break Err(e),  // Failed to read, clean up and exit
@@ -306,7 +302,7 @@ impl<'a> Display<'a> {
         };
     }
 
-    fn handle_keyboard_event(&mut self, event: KeyEvent) -> crossterm::Result<()> {
+    fn handle_keyboard_event(&mut self, event: event::KeyEvent) -> crossterm::Result<()> {
         use crossterm::event::KeyCode::*;
         use crossterm::event::KeyModifiers as Mod;
         match (event.modifiers, event.code) {
@@ -355,7 +351,7 @@ impl<'a> Display<'a> {
         }
     }
 
-    fn handle_mouse_event(&mut self, event: MouseEvent) -> crossterm::Result<()> {
+    fn handle_mouse_event(&mut self, event: event::MouseEvent) -> crossterm::Result<()> {
         use crossterm::event::MouseEventKind::*;
         match event.kind {
             ScrollUp => {
@@ -381,5 +377,10 @@ impl<'a> Display<'a> {
         }
         self.size = (x, y);
         self.refresh()
+    }
+
+    fn handle_paste(&mut self, s: String) -> crossterm::Result<()> {
+        self.user_msg.push_str(&s);
+        self.draw_footer()
     }
 }
