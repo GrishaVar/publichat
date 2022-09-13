@@ -76,7 +76,7 @@ impl<'a> Display<'a> {
             stdout: std::io::stdout(),
             size: terminal::size()?,
             user_msg: String::with_capacity(50),
-            view: ViewPos::Last,
+            view: ViewPos::Index { msg_id: 0, chr_id: 0 },
             last_update: UNIX_EPOCH,
             chat_name,
         };
@@ -246,17 +246,17 @@ impl<'a> Display<'a> {
             ViewPos::Index { msg_id, .. } => {  // TODO: use chr_id
                 // cursor already at right position, draw one msg at a time
                 // TODO: print start.msg partial
-                for msg in state.queue.range(1+usize::from(msg_id)..) {
-                    if remaining_lines == 0 { break }
-
-                    let line_count = req_lines(msg.len);
-                    if let Some(res) = remaining_lines.checked_sub(line_count) {
+                if msg_id >= state.queue.len() as u16 { return Ok(()) }  // too far down
+                for msg in state.queue.range(1 + usize::from(msg_id)..) {
+                    let msg_height = req_lines(msg.len);
+                    if msg_height <= remaining_lines {
                         // normal situation, whole message fits on screen
                         write!(stdout, "{msg}\r\n")?;
-                        remaining_lines = res;
+                        remaining_lines -= msg_height;  // TODO: check cursor pos?
                     } else {
-                        let printable_chars = remaining_lines * w;
-                        write!(stdout, "{}", &msg.to_string()[..usize::from(printable_chars)])?;
+                        // TODO: think about dealing with unicode graphemes
+                        // let printable_chars = remaining_lines * w;
+                        // write!(stdout, "{}", &msg.to_string()[..usize::from(printable_chars)])?;
                         break;  // finished drawing
                     }
                 }
@@ -306,11 +306,12 @@ impl<'a> Display<'a> {
         // positive is scolling up
         self.view = match self.view {
             ViewPos::Last => ViewPos::Last,
-            ViewPos::Index{msg_id, chr_id} => if up {
-                ViewPos::Index{msg_id: msg_id-1, chr_id}
+            ViewPos::Index{mut msg_id, chr_id} => if up {
+                msg_id = msg_id.checked_sub(1).unwrap_or(0);
+                ViewPos::Index{ msg_id, chr_id }
             } else {
                 // TODO: possible ViewPos::Last
-                ViewPos::Index{msg_id: msg_id+1, chr_id}
+                ViewPos::Index{ msg_id: msg_id+1, chr_id }
             },
         };
     }
