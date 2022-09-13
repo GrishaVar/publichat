@@ -111,21 +111,11 @@ impl<'a> Display<'a> {
                     Key(KeyEvent{code: Esc, modifiers: Mod::NONE, .. }) => break Ok(()),
                     Key(e) => self.handle_keyboard_event(e)?,
                     Mouse(e) => self.handle_mouse_event(e)?,
-                    Resize(x, y) => {
-                        // I test this a lot but actually it should be a rare event
-                        if x < MIN_WIDTH || y < MIN_HEIGHT {
-                            break Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                "Terminal size not supported! Too small :(",
-                            ))
-                        }
-                        self.size = (x, y);
-                        self.refresh()?;
-                    },
+                    Resize(x, y) => self.handle_resize(x, y)?,
                     FocusGained => {},  // TODO
                     FocusLost => {},  // TODO
                     Paste(_) => {},  // TODO
-                    
+
                 },
                 Ok(false) => {},  // No events to be processed
                 Err(e) => break Err(e),  // Failed to read, clean up and exit
@@ -295,11 +285,11 @@ impl<'a> Display<'a> {
     }
 
     fn refresh(&mut self) -> crossterm::Result<()> {
-        // clear & draw the full frame
-        self.stdout.execute(terminal::Clear(ClearType::All))?;
+        // Draw the full frame
         self.draw_header()?;
         self.draw_messages()?;
-        self.draw_footer()
+        self.draw_footer()?;
+        self.stdout.flush()
     }
 
     fn move_pos(&mut self, up: bool) {
@@ -380,5 +370,16 @@ impl<'a> Display<'a> {
             },
             _ => Ok(()),
         }
+    }
+
+    fn handle_resize(&mut self, x: u16, y: u16) -> crossterm::Result<()> {
+        if y < MIN_HEIGHT || x < MIN_WIDTH {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Terminal size not supported! Too small :(",
+            ))
+        }
+        self.size = (x, y);
+        self.refresh()
     }
 }
