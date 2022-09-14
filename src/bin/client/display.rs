@@ -1,9 +1,8 @@
 use std::io::{self, Write};
-use std::time::{self, SystemTime, UNIX_EPOCH};
 use std::sync::{Arc, Mutex, mpsc};
 use std::mem;
 
-use crossterm::{ExecutableCommand, QueueableCommand};
+use crossterm::QueueableCommand;
 use crossterm::cursor;
 use crossterm::style::{
     style,
@@ -41,8 +40,8 @@ pub struct Display<'a> {
     size: (u16, u16),  // size of terminal (w, h)
     user_msg: String,  // stuff the user is typing
     view: ViewPos,
-    last_update: SystemTime,
     chat_name: &'a str,
+    known_count: usize,
 }
 
 // WARNING: this file is very OO; proceed with your own risk!
@@ -71,8 +70,8 @@ impl<'a> Display<'a> {
             size: terminal::size()?,
             user_msg: String::with_capacity(50),
             view: ViewPos::Index { msg_id: 0, chr_id: 0 },
-            last_update: UNIX_EPOCH,
             chat_name,
+            known_count: 0,
         };
 
         // draw first frame then start mainloop
@@ -116,13 +115,17 @@ impl<'a> Display<'a> {
                 Ok(false) => {},  // No events to be processed
                 Err(e) => break Err(e),  // Failed to read, clean up and exit
             }
-    
-            // re-draw all messages from time to time
-            // this will display new messages as they come in
-            if time::SystemTime::now().duration_since(self.last_update).unwrap() > _DISP_DELAY {
+
+            let queue_len = self.state.lock().map_err(|_| {
+                use std::io::{Error, ErrorKind::Other};
+                Error::new(Other, "Failed to lock state")
+            })?.queue.len();
+
+            // re-draw if there are new messages
+            if self.known_count != queue_len {
+                self.known_count = queue_len;
                 self.draw_messages()?;
                 self.draw_footer()?;
-                self.last_update = time::SystemTime::now();
             }
         }
     }

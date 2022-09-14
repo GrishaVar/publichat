@@ -4,7 +4,8 @@ use publichat::buffers::hash::Buf as HashBuf;
 use crate::msg::Message;
 
 pub const FQ_DELAY: Duration = Duration::from_millis(200);
-const DISP_FPS: u64 = 1;
+
+const DISP_FPS: u64 = 100;
 pub const _DISP_DELAY: Duration = Duration::from_millis(1000 / DISP_FPS);
 
 pub struct GlobalState {
