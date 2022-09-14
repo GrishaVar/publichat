@@ -231,7 +231,7 @@ fn main() -> Result<(), Box<dyn Error>> {  // TODO: return Res instead?
 
     // start drawer thread
     eprintln!("Starting drawer...");
-    match Display::start(state, msg_tx, chat.as_str()) {
+    match Display::start(state, msg_tx, chat.as_str(), user.as_str()) {
         Ok(_) => eprintln!("Drawer finished"),
         Err(e) => eprintln!("Drawer crashed: {e}"),
     }

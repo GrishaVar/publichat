@@ -41,7 +41,9 @@ pub struct Display<'a> {
     user_msg: String,  // stuff the user is typing
     view: ViewPos,
     chat_name: &'a str,
+    user_name: &'a str,
     known_count: usize,
+    hidden: bool,
 }
 
 // WARNING: this file is very OO; proceed with your own risk!
@@ -50,6 +52,7 @@ impl<'a> Display<'a> {
         state: Arc<Mutex<GlobalState>>,
         msg_tx: mpsc::Sender<String>,
         chat_name: &str,
+        user_name: &str,
     ) -> crossterm::Result<()> {
         // setup
         let mut stdout = std::io::stdout();
@@ -63,7 +66,7 @@ impl<'a> Display<'a> {
         stdout.flush()?;
 
         // set up struct
-        let mut disp = Display{
+        let mut disp = Display {
             state,
             msg_tx,
             stdout: std::io::stdout(),
@@ -71,7 +74,9 @@ impl<'a> Display<'a> {
             user_msg: String::with_capacity(50),
             view: ViewPos::Index { msg_id: 0, chr_id: 0 },
             chat_name,
+            user_name,
             known_count: 0,
+            hidden: true,
         };
 
         // draw first frame then start mainloop
@@ -137,8 +142,15 @@ impl<'a> Display<'a> {
         stdout.queue(cursor::MoveTo(0, 0))?;
 
         // TODO: cache with each size change?
-        // TODO: make hidable?
-        let header_text = format!("{:^w$}", self.chat_name);
+        let header_text = format!(
+            "{:^w$}",
+            format!(
+                "chat: {}, user: {}",
+                if self.hidden {"******"} else {self.chat_name},
+                if self.hidden {"******"} else {self.user_name},
+            )
+        );
+
         let header = style(header_text)
             .with(FG_COLOUR)
             .on(BG_COLOUR)
@@ -270,8 +282,8 @@ impl<'a> Display<'a> {
                     } else {
                         // only bottom half of top msg fits
                         // note: the message prefix will NOT be visible
-                        stdout.queue(cursor::MoveTo(0, HEADER_HEIGHT))?;
-                        let skipped_lines = msg_height - remaining_lines;
+                        // stdout.queue(cursor::MoveTo(0, HEADER_HEIGHT))?;
+                        // let skipped_lines = msg_height - remaining_lines;
 
                         // TODO: think about dealing with unicode graphemes
                         // write!(stdout, "{}", &msg.repr[(w*skipped_lines) as usize..])?;
@@ -308,6 +320,7 @@ impl<'a> Display<'a> {
     fn handle_keyboard_event(&mut self, event: event::KeyEvent) -> crossterm::Result<()> {
         use crossterm::event::KeyCode::*;
         use crossterm::event::KeyModifiers as Mod;
+
         match (event.modifiers, event.code) {
             (Mod::NONE, Char(c)) | (Mod::SHIFT, Char(c)) => {  // add char
                 self.user_msg.push(c);
@@ -320,12 +333,12 @@ impl<'a> Display<'a> {
             (Mod::CONTROL, Backspace) | (Mod::CONTROL, Char('h')) => {
                 // remove word
                 let pos = self.user_msg
-                    .trim_end()
+                    .trim_end()  // remove trailing spaces
                     .trim_end_matches(|c: char|
                         !c.is_whitespace()
                         && !c.is_ascii_punctuation()
-                    )
-                    .trim_end()
+                    )  // remove last word
+                    .trim_end()  // remove more spaces (probably just one)
                     .len();
 
                 self.user_msg.truncate(pos);
@@ -339,6 +352,10 @@ impl<'a> Display<'a> {
             },
             // (Mod::NONE, Delete) => Ok(()),  // remove char
             // (Mod::CONTROL, Delete) => Ok(()),  // remove word
+            (Mod::CONTROL, Char('s')) => {  // toggle hide secret
+                self.hidden ^= true;
+                self.draw_header()
+            }
             (Mod::NONE, Up) => {  // scroll up
                 self.move_pos(true);
                 self.draw_messages()?;
