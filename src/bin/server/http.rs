@@ -13,36 +13,6 @@ fn send_code(code: u16, stream: &mut TcpStream) -> Res {
     )
 }
 
-fn send_data(code: u16, data: &[u8], stream: &mut TcpStream) -> Res {
-    let header_string = format!(
-        "HTTP/1.1 {}\r\nContent-Length: {}\r\n\r\n",
-        code,
-        data.len(),
-    );
-
-    full_write(
-        stream,
-        &[header_string.as_bytes(), data].concat(),
-        "Failed to send file",
-    )
-}
-
-fn handle_robots(stream: &mut TcpStream) -> Res {
-    const RESP_ROBOTS: &[u8] = b"\
-        HTTP/1.1 200\r\n\
-        Content-Length: 25\r\n\r\n\
-        User-agent: *\nDisallow: /
-    ";
-    full_write(stream, RESP_ROBOTS, "Failed to send robots")
-}
-
-fn handle_version(stream: &mut TcpStream, globals: &Arc<Globals>) -> Res {
-    // TODO: avoid allocations to pre-building packet?
-    // TODO: should functions like this map_err to show where the issue is?
-    send_data(200, &globals.git_hash, stream)
-        .map_err(|_| "Failed to send version")
-}
-
 fn handle_ws(req: &str, mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
     // handshake
     let key_in = match req.split("Sec-WebSocket-Key: ").nth(1) {
@@ -77,18 +47,7 @@ pub fn handle(mut stream: TcpStream, globals: &Arc<Globals>) -> Res {
     };
 
     match path {
-        "/" | ""         => send_data(200, FILE_INDEX_HTML, &mut stream)
-            .map_err(|_| "Failed to send index.html"),
-        "/favicon.ico"   => send_data(200, FILE_FAVICON_ICO, &mut stream)
-            .map_err(|_| "Failed to send favicon"),
-        "/mobile" | "/m" => send_data(200, FILE_MOBILE_HTML, &mut stream)
-            .map_err(|_| "Failed to send mobile.html"),
-        "/ws"            => handle_ws(req, stream, globals),  // start WS
-        "/robots.txt"    => handle_robots(&mut stream),
-        "/tools"         => send_data(200, FILE_TOOLS_HTML, &mut stream)
-            .map_err(|_| "Failed to send 404"),
-        "/version"       => handle_version(&mut stream, globals),
-        _                => send_data(404, FILE_404_HTML, &mut stream)
-            .map_err(|_| "Failed to send 404"),
+        "/ws"   => handle_ws(req, stream, globals),  // start WS
+        _       => Err("Invalid HTTP path (path!=/ws)"),
     }
 }

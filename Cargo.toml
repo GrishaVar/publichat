@@ -2,7 +2,7 @@
 name = "publichat"
 version = "0.1.0"
 edition = "2021"
-default-run= "client"
+default-run= "server"
 
 [dependencies]
 aes = "0.8.1"
@@ -10,7 +10,7 @@ base64 = "0.13.0"
 ctr = "0.9.1"
 sha1_smol = "1.0.0"
 sha3 = "0.10.1"
-crossterm = "0.25"  # TODO: optional for client only?
+crossterm = "0.25"
 rand = "0.8.5"  # TODO: this too
 ed25519-dalek = "1.0.1"
 
